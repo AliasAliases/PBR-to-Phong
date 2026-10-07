@@ -31,7 +31,15 @@ LANGUAGE_NAMES = {
 
 
 def system_language() -> str:
-    """跟随系统：中文系统 → zh，其余 → en。"""
+    """跟随系统：中文系统 → zh，其余 → en。
+
+    ⚠️ 环境变量 **`PBR2PHONG_LANG`**（`zh` / `en`）**优先于系统探测** —— 给 CI 与自动化测试用：
+    GitHub 的 runner 是**英文系统**，而套件里有不少断言是按**中文界面**写的（历史原因）→
+    测试跑法（`tests/run_all.py`）会把它定成 `zh`，否则 CI 上一片红。用户手动设它也有效。
+    """
+    forced = (os.environ.get("PBR2PHONG_LANG") or "").strip().lower()
+    if forced in (LANG_ZH, LANG_EN):
+        return forced
     for probe in (locale.getlocale()[0], locale.getdefaultlocale()[0] if hasattr(locale, "getdefaultlocale") else None,
                   os.environ.get("LANG")):
         if probe and str(probe).lower().startswith("zh"):

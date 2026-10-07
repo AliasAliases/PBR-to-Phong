@@ -38,6 +38,10 @@ def child_env() -> dict:
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("QT_QPA_PLATFORM", "offscreen")     # 离屏跑 GUI，不需要桌面
+    # ⚠️ **必须把语言定死**：套件里有不少断言是按**中文界面**写的，而 CI 的 runner 是**英文系统**
+    #    （`system_language()` 会判成 en）→ 不钉住就会在 CI 上一片红（2026-10-07 GitHub Actions #1 实测）。
+    #    想用别的语言跑就自己先设 `PBR2PHONG_LANG`（`setdefault` 不会覆盖你设的）。
+    env.setdefault("PBR2PHONG_LANG", "zh")
     fonts = Path(r"C:\Windows\Fonts")
     if fonts.is_dir():
         env.setdefault("QT_QPA_FONTDIR", str(fonts))   # 没有它 Qt 会把中文画成方框（Linux/CI 上不存在）
