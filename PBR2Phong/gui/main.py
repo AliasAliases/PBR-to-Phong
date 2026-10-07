@@ -1439,10 +1439,8 @@ class ConfigPage(QtWidgets.QWidget):
         ev = QtWidgets.QVBoxLayout(self.grp_eye)
         ev.setContentsMargins(8, 4, 8, 4)
         ev.setSpacing(3)
-        self.lbl_eye_hint = QtWidgets.QLabel()
-        self.lbl_eye_hint.setWordWrap(True)
-        self.lbl_eye_hint.setStyleSheet(UI_DESC)
-        ev.addWidget(self.lbl_eye_hint)
+        # ⚠️ 14-E：这里**不再**单独放一行灰字提示 —— 它整块多占约 19px，在别的字体环境（CI 的英文 runner）
+        #    上会把第 3 页顶出 1200×680（实测 637 > 623）。说明并进**组标题**（`eye.title`），省一行。
         row_iris = PathRow(label_width=110)
         self.lbl_iris, self.ed_iris, self.btn_iris = row_iris.lbl, row_iris.ed, row_iris.btn
         self.btn_iris.clicked.connect(lambda: self._pick_eye_image(self.ed_iris))
@@ -1871,7 +1869,6 @@ class ConfigPage(QtWidgets.QWidget):
         w.t_into(self.lbl_kv_empty, "attr.kv_empty")
         # 13-E：眼睛专用图那组的文案（默认藏着，选到眼睛档才出现）
         self.grp_eye.setTitle(w.t("eye.title"))
-        w.t_into(self.lbl_eye_hint, "eye.hint")
         w.t_into(self.lbl_iris, "eye.iris")
         w.t_into(self.lbl_ao, "eye.ao")
         w.t_into(self.btn_iris, "naming.browse")

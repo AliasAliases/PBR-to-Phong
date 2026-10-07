@@ -440,12 +440,9 @@ STRINGS = {
     "naming.material_name": {"zh": "材质名", "en": "Material name"},
 
     # ---- 13-E 眼睛专用图（只对「角色-眼睛」档出现；跟档走、不做折叠）----
-    "eye.title": {"zh": "眼睛专用图（只对「角色-眼睛」档）",
-                  "en": "Eye textures (Character · Eyes preset only)"},
-    "eye.hint": {
-        "zh": "眼睛档要的是虹膜那张图（美术资产）：虹膜图必填，眼睛 AO 选填（没有就不写 $AmbientOcclTexture）。",
-        "en": "The Eyes preset needs the iris image (an art asset): iris is required, eye AO optional "
-              "(no AO ⇒ no $AmbientOcclTexture line)."},
+    # ⚠️ 14-E：说明并进**标题**（原来另起一行灰字提示，整块多占约 19px → 别的字体环境会把第 3 页顶出 1200×680）
+    "eye.title": {"zh": "眼睛专用图（只对「角色-眼睛」档）—— 虹膜图必填、眼睛 AO 选填",
+                  "en": "Eye textures (Character · Eyes preset only) — iris required, eye AO optional"},
     "eye.iris": {"zh": "虹膜图（必填）", "en": "Iris map (required)"},
     "eye.ao": {"zh": "眼睛 AO（选填）", "en": "Eye AO (optional)"},
     "eye.pick": {"zh": "选一张眼睛专用图", "en": "Pick an eye texture"},
