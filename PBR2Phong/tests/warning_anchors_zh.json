@@ -1,0 +1,32 @@
+{
+  "说明": "12 单改造前的中文警告原句（占位符归一化成 {}），由 阶段0_实测/out/warn_dump.txt 机械生成",
+  "锚点": {
+    "no_roughness_map": "没有粗糙度贴图 → 按「全粗糙」处理（高光会很大很糊）",
+    "no_metallic_map": "没有金属度贴图 → 按「全非金属」处理（高光保持白色）",
+    "no_ao_map": "没有 AO 贴图 → 跳过 AO 相关步骤",
+    "no_normal_map": "没有法线贴图 → 不输出法线（引擎会用平坦法线）",
+    "roughness_is_constant": "粗糙度贴图整张都是同一个值 → 处处一样光，等于没有粗糙度细节，回去看看烘焙是不是没把粗糙度写进去",
+    "roughness_has_two_values": "粗糙度贴图只有两个值 → 高光只有两档（不是过渡），这类图多半是烘焙或导出时被压成了黑白",
+    "metallic_all_zero": "金属度贴图整张都是 0（全非金属）→ 高光保持白色；如果你本来就要做金属，回去看看烘焙是不是没把金属度写进去",
+    "metallic_all_one": "金属度贴图整张都是 255（全金属）→ 整块料都会按金属上色，非金属的地方也会带金属染色",
+    "darken_metal_route": "当前用的是「压黑派」（金属区被压暗）——这是 albedotint 不生效时的退路",
+    "normal_is_flat": "法线贴图是平的（R/G 几乎都是 128）→ 模型上不会有任何凹凸，回去看看烘焙是不是没勾上法线",
+    "cutout_needs_normal": "要透明就必须有法线图：这套素材没有法线贴图 → 这次**不出高光遮罩**（真塞进底色 alpha 的话，会把底色的透明整个吃掉）",
+    "mask_carrier_normal_missing": "遮罩载体选了法线图，但没有法线贴图 → 遮罩只好塞进底色 alpha",
+    "basecolor_alpha_overridden": "你的底色带透明，但高光遮罩会覆盖它 —— 要透明请打开「这个材质要透明」",
+    "no_alpha_but_cutout": "这套素材的底色没有透明区域 —— 勾了也不会裁掉任何东西。",
+    "mask_size_mismatch": "遮罩与宿主图尺寸不一致 → 两边都放大到 {}×{}（只放大、不缩小）",
+    "brush_ao_not_baked": "笔刷路线：AO 贴图**故意不烘进底色** —— 平铺贴图烘进 AO/大尺度明暗会跟着重复、大老远就看出规律；笔刷的明暗 100% 交给 lightmap（Hammer笔刷路线.md §3①）",
+    "brush_dropped_envmap_params": "笔刷路线：跳过预设里的 {} 个 $envmap* 参数（笔刷的 envmap 由「反射遮罩」开关决定）",
+    "brush_mask_carrier_key": "笔刷遮罩落在 {} 的 alpha → VMT 自动写 {} 1",
+    "brush_forbidden_keys": "⚠️ 笔刷 VMT 里出现了禁令键：{}",
+    "brush_ignores_model_names": "笔刷路线忽略模型里的材质名（笔刷材质名 = 贴图基名，在 Hammer 材质浏览器里直接选）",
+    "eye_eyerefract_written": "眼睛档（EyeRefract）：按官方那套键写，不出 Phong/底色——眼睛要的是虹膜图 + 眼睛 AO",
+    "other_shader_kept_base_only": "这一档用的是 {} 着色器（不是 VertexLitGeneric）→ 只写底色与预设带的参数；眼睛那套 $Iris 贴图本版不做",
+    "cutout_replaced_translucent": "要透明：已把 $translucent 换成 $alphatest（半透明混合会让树叶这类边缘发黑）",
+    "cutout_wrote_alphatest": "要透明 → 自动写 $alphatest 1（二值裁剪；树叶 / 铁网这类不要用 $translucent）",
+    "basemapalphaphongmask_removed": "遮罩实际落在法线 alpha（不是底色）→ 已去掉预设里的 $basemapalphaphongmask（留着它引擎会去读底色 alpha，把遮罩指错地方）",
+    "basemapalphaphongmask_added": "遮罩在底色 alpha → 自动补上 $basemapalphaphongmask 1（否则引擎不会去读它）",
+    "deploy_skipped_conflicts": "materials 里有同名文件、你没让覆盖 → 这次只出了产物，没有部署"
+  }
+}

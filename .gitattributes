@@ -1,0 +1,22 @@
+# 换行符钉死规则 —— 免得换台机器 clone 后 .bat 被改坏
+#
+# 背景：本机 `core.autocrlf = true`。clone 到 autocrlf=false 的机器时，仓库里的
+# 换行会被原样检出，而 .bat 只认 CRLF（只有 LF 会把 rem / if 块拆错）；
+# 反之 python 源码统一 LF 更省事。
+#
+# 规则：默认按内容自动判定 + 文本文件一律 LF，只有 .bat 强制 CRLF。
+
+* text=auto eol=lf
+
+# Windows 批处理必须 CRLF（cmd.exe 的要求）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制，别碰
+*.png binary
+*.vtf binary
+*.mdl binary
+*.vpk binary
+*.dll binary
+*.exe binary
+*.zip binary
