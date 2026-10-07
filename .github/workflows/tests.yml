@@ -1,0 +1,32 @@
+name: tests
+
+# 14-E：把"全量测试"从烧 token 变成烧 CI。
+# 本地日常只跑受影响的套件（地图见 _task/README.md「测试与 token 经济性」）；
+# 全量（13 套件）交给这里 —— 每次 push / PR 都跑一遍，红了在 Actions 页面上看。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 装依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy Pillow PySide6
+
+      - name: 全量测试（默认只打一行汇总）
+        run: python PBR2Phong/tests/run_all.py
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"
+          # ⚠️ 这台 runner 上**没有** VTFCmd、也没有 L4D2 安装、也没有官方语料 ——
+          #    相关套件/段落会自己打印「⏭ 跳过」并继续，不算失败（14-D / 14-E 就是为这个改的）。

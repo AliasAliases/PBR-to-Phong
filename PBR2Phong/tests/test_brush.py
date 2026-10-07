@@ -128,7 +128,8 @@ def _run(src: Path, tmp: Path, matset, **kw):
 def test_end_to_end():
     print("\n== §6.3 / §6.4 端到端 + 产物自检 ==")
     if not vtf.find_vtfcmd():
-        check("找到 VTFCmd（端到端需要）", False, "没找到")
+        # 14-E：缺 VTFCmd 是公开仓库 / CI 的常态 → 说明并跳过这一段（不报红）
+        print("   ⏭ 跳过端到端段：本机没有 VTFCmd.exe（这段要真出 VTF）")
         return
     try:
         import vtfio                                 # 阶段0_实测/vtfio.py：解 VTF 顶层 mip

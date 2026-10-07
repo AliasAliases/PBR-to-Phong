@@ -83,9 +83,10 @@ def run(folder: Path, out: Path, overrides: dict, preset: str = "道具") -> tup
 def main() -> int:
     print("== 09 透明材质支持（合成素材，离线）==")
     if not vtf.find_vtfcmd():
-        check("本机有 VTFCmd（没有就跳过）", False, "没找到 VTFCmd.exe")
-        return 1
-
+        # 14-E：公开仓库 / CI 上没有 VTFCmd 是**常态** → 打印说明并跳过，**不许报红**
+        print("   ⏭ 跳过整个套件：本机没有 VTFCmd.exe（这一套每次都要真出 VTF）")
+        print("      （要跑它就装 VTFEdit-Reloaded，或给 `core/vtf.py` 认的常见位置放一份）")
+        return 0
     with tempfile.TemporaryDirectory(prefix="pbr2phong-alpha-") as td:
         tmp = Path(td)
         leaf = make_material(tmp / "src", "Leaf", with_normal=True)

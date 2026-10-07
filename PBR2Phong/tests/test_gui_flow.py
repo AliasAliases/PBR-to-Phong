@@ -159,8 +159,12 @@ def main() -> int:
         page.ed_model.setText(str(mdl))
         app.processEvents()
         hint = page.lbl_model_hint.text()
+        # ⚠️ 别硬编码材质名：用户 2026-10-07 把这个模型从"双材质"重导成了 `School_Gate00/01/02`
+        #    （2026-09-25 那次是 `school_gate` + `school_gate_windows`）→ **从模型里读出什么就断言什么**。
+        from core import naming as _naming
+        want = [t for t in _naming.read_mdl(mdl).textures if t.lower() != "no_material"]
         check("13-B：① 页读模型会把**全部**材质名列出来",
-              "school_gate" in hint and "school_gate_windows" in hint, hint.replace("\n", " / ")[:200])
+              bool(want) and all(n in hint for n in want), f"模型里={want} 提示={hint[:160]}")
         # ⚠️ 13-B 返工（一类 2026-10-01）：这条**原来锁的是错的措辞**（"要分几次跑"）——
         #    实测是"一次转换就给每个名字各写一份 VMT、都指向本次这套贴图"，只有"不同材质槽配
         #    不同贴图"才需要分开跑。现在锁**正确的那半句**，并断言那句错的短语已经消失。
@@ -175,6 +179,13 @@ def main() -> int:
         app.processEvents()
 
     # ④ 点「开始转换」
+    # ⚠️ 14-E：**这一段之后全都要真出 VTF** → 缺 VTFCmd（公开仓库 / CI 常态）就在这里**说明并打住**，
+    #    前面那些纯界面检查照跑（不报红、也不假装跑过）。
+    from core import vtf as _vtf
+    if not _vtf.find_vtfcmd():
+        print("   ⏭ 跳过转换段（从这里往后）：本机没有 VTFCmd.exe —— 界面检查已全部跑完")
+        print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项（转换段已跳过）")
+        return 1 if FAIL else 0
     # ⚠️ 13-C：`测试素材/GuiFlow_phong/` 里有上次留下的产物（指纹已变）→ 新闸门会**先问**
     #    （以前是死代码，直接静默覆盖）。这里**模拟用户点「覆盖」**，并把"它真的问了"记下来；
     #    不这么做，测试会卡在那个模态对话框上（worker 在 `_confirm` 里等 300s）。

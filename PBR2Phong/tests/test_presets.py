@@ -115,7 +115,8 @@ def main() -> int:
     # ---------- 判据 3 / 4：真跑 3+1 档，看产出的 .vmt ----------
     print("== 判据 3 / 4：真跑几档，看产出的 .vmt ==")
     if not has_vtfcmd:
-        check("本机有 VTFCmd（没有就跳过这几条）", False, "没找到 VTFCmd.exe → 跳过")
+        # 14-E：缺 VTFCmd 是公开仓库 / CI 的常态 → 说明并跳过（不报红）
+        print("   本机没有 VTFCmd.exe → 跳过这几条（要它们就装 VTFEdit-Reloaded）")
     else:
         with tempfile.TemporaryDirectory(prefix="pbr2phong-vmt-") as td:
             out = Path(td)

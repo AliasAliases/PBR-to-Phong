@@ -135,14 +135,16 @@ def test_naming():
     if mdl is None:
         return
     m = naming.read_mdl(mdl)
-    # ⚠️ 2026-09-25：真实 school_gate.mdl 已被用户**重导成双材质**
-    #    （`school_gate` + `school_gate_windows`）→ 断言改成"第一个材质 + 包含关系"，
-    #    不再断言"恰好一个"（多材质是 v2 范围，v1 的做法 = 同一个 `$cdmaterials` 目录跑两次）。
+    # ⚠️ 这个模型用户改过好几次：2026-09-25 重导成**双材质**（`school_gate` + `school_gate_windows`），
+    #    2026-10-07 又重导成**三个**（`School_Gate00/01/02`）→ 断言**别再硬编码具体材质名**，
+    #    改成"从模型里读出来什么就断言什么"（跟着实物走，用户下次再重导也不会红）。
     check("$cdmaterials 解析正确",
           bool(m.cdmaterials) and m.cdmaterials[0] == "custom\\school_gate\\", str(m.cdmaterials))
-    check("材质名解析正确（相对自身偏移）", "school_gate" in m.textures, str(m.textures))
+    check("材质名解析正确（相对自身偏移）",
+          len(m.textures) >= 2 and all("school_gate" in t.lower() for t in m.textures),
+          str(m.textures))
     check("拼出的 VMT 路径正确",
-          "custom/school_gate/school_gate.vmt" in m.expected_vmt_paths(),
+          all(f"custom/school_gate/{t}.vmt" in m.expected_vmt_paths() for t in m.textures),
           str(m.expected_vmt_paths()))
 
     sg = naming.read_mdl(mdl.parent / "sportsground.mdl")
@@ -663,7 +665,8 @@ def test_cli_readable_log():
     from cli import convert as cli
 
     if not vtf.find_vtfcmd():
-        check("本机有 VTFCmd（没有就跳过这条端到端）", False, "没找到 VTFCmd.exe → 跳过")
+        # 14-E：缺 VTFCmd 是公开仓库 / CI 的常态 → 说明并跳过（不报红）
+        print("   本机没有 VTFCmd.exe → 跳过这条端到端（公开仓库 / CI 上属正常）")
         return
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)

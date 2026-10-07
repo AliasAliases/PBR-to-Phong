@@ -39,13 +39,19 @@ tests/          **十三个套件共 557 项**：test_pipeline 110 / test_gui_fl
                 **test_warnings 20（12 单：警告 = 码 + 参数；27 条中文锚点逐字比对 / 全码英文渲染无中日韩字 / 逐码覆盖 / 旧 json 兼容 + 14-A 的 log 可读化）**
                 另有 shot_gui.py（离屏截图与控件文字清单）、check_exe.py（真启动打包好的 exe 并抓图）
 
-**跑测试的前提**（逐套件；缺前提的检查会**打印一行说明并跳过**，不会把整片报红 —— 公开仓库里这很重要）：
+**跑测试的前提**（逐套件；缺前提的检查会**打印一行说明并跳过**，不会把整片报红 —— 公开仓库 / CI 上这很重要）：
+
+> 🆕 **14-E：全量跑法** = `python PBR2Phong/tests/run_all.py` —— **默认只打一行汇总**（例：`13 套件 · 557 项 · 失败 0`），
+> 失败才列失败套件与那几条 ✗；`--verbose` 出明细、`--only test_pipeline,test_warnings` 只跑指定套件、`--list` 列名字。
+> **日常只跑受影响的 1~3 个套件**（改哪儿跑哪儿的地图写在 `_task/README.md`「测试与 token 经济性」），
+> **全量留给片收口 / CI**（`.github/workflows/tests.yml`：push 与 PR 都在 windows-latest 上跑一遍）。
 
 | 套件 | 前提 |
 |---|---|
 | 全部 | Python 3.11 + `PySide6` / `numpy` / `Pillow`；跑 GUI 类的建议 `QT_QPA_PLATFORM=offscreen` |
-| 要出 VTF 的（`test_pipeline` / `test_gui_flow` / `test_presets` / `test_transparency` …） | 本机有 **VTFCmd.exe**（Source SDK / VTFLib；`core/vtf.py` 会自动找常见位置，也可 `--vtfcmd` 指定）；没有 → 相关几条跳过并说明 |
+| 要出 VTF 的（`test_pipeline` 的端到端那条 / `test_gui_flow` 的转换段 / `test_presets` 的 VMT 段 / `test_brush` 的产物自检 / **`test_transparency` 整片**） | 本机有 **VTFCmd.exe**（Source SDK / VTFLib；`core/vtf.py` 会自动找常见位置，也可 `--vtfcmd` 指定）；**没有 → 说明并跳过**（`test_transparency` 会整片跳过，其余只跳那几段） |
 | **需要 L4D2 安装**的几条（`test_pipeline` 的命名层与 `--list-materials`、`test_gui_flow` 的 13-B 三条） | `…\Left 4 Dead 2\left4dead2\models\custom\school_gate.mdl` 在（脚本里是硬编码路径，本机实测用）→ **没有就跳过**（合计约 16 条） |
+| `test_presets` 的 13-E 段 / `test_brush` 的产物自检 | 要工作区里的 `Textures/survivors/**`（官方语料）与 `阶段0_实测/vtfio.py` —— **都不随公开仓库分发** → 缺了就说明并跳过 |
 | `test_gui_flow` / `test_presets` | 仓库里带 `测试素材/合成素材/**`（26 KB，可 `tests/make_synthetic_set.py` 重生成） |
 | `test_layout` / `test_preview` / `test_sliders` | 要有 `C:\Windows\Fonts`（`QT_QPA_FONTDIR`）才能量版式 |
 ```
