@@ -114,6 +114,54 @@ def test_source_io():
               f"实得 {got_key} {(sx, sy)} {got_prefix!r}")
 
 
+def test_no_alpha_marker():
+    """15-B：MB 新写法 `_NoAlpha`（没有 alpha 的底色）不许被认成 alpha 灰度图。
+
+    历史症状（一类 2026-10-07 定位）：`Concrete_Grey-BaseColor-2k_NoAlpha.png` →
+    ① 尺寸解析只看末段 → `NoAlpha` 不是尺寸 → **尺寸整个丢掉**；
+    ② "粘着写法"回退里 `noalpha` 以 `alpha` 结尾 → 命中 `shader.alpha` → **底色静默进 `ignored`**。
+    """
+    print("\n== 输入层：MB 的 `_NoAlpha` 标记（15-B）==")
+    import tempfile
+
+    cases = [
+        # 带 alpha 的底色 = 正名
+        ("Concrete_Grey-BaseColor-2k.png", "shader.base_color", (2048, 2048), "Concrete Grey"),
+        # 没有 alpha 的底色 = 正名 + `_NoAlpha`
+        ("Concrete_Grey-BaseColor-2k_NoAlpha.png", "shader.base_color", (2048, 2048), "Concrete Grey"),
+        # UDIM：标记插在瓦片号**之前**
+        ("Body-BaseColor-2k_NoAlpha.1001.png", "shader.base_color", (2048, 2048), "Body"),
+        # 用户自己起的 `NoAlphaFoo` 不许被误伤
+        ("NoAlphaFoo-BaseColor-2k.png", "shader.base_color", (2048, 2048), "NoAlphaFoo"),
+        # 瓦片号本身不是尺寸：没写尺寸时不许拿它凑数
+        ("Body-BaseColor.1001.png", "shader.base_color", (0, 0), "Body"),
+    ]
+    for name, key, size, prefix in cases:
+        got_key, sx, sy, got_prefix = source_io.parse_filename(name)
+        check(f"{name} → {key}", got_key == key and (sx, sy) == size and got_prefix == prefix,
+              f"实得 {got_key} {(sx, sy)} {got_prefix!r}")
+
+    # 扫目录这一层才是"底色到底进没进 ignored"的现场（parse_filename 单独看不算数）
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        for name in ("Concrete_Grey-BaseColor-2k_NoAlpha.png",
+                     "Concrete_Grey-Roughness-2k.png",
+                     "Concrete_Grey-Normal-2k.png"):
+            (d / name).write_bytes(b"x")            # scan_folder 只看后缀，不读内容
+        items = source_io.scan_folder(d)
+        ms = items[0] if items else None
+        check("扫目录只扫出一套", len(items) == 1, str(len(items)))
+        check("`_NoAlpha` 的底色照样认成底色（没被丢进 ignored）",
+              bool(ms) and "shader.base_color" in ms.images and not ms.ignored,
+              (ms.summary() if ms else "没扫到"))
+        # ⚠️ 用 getattr 取：反向实验要把这个文件拷到"改动前"的 commit 上跑，那时还没有这个字段 ——
+        #    要的是**报红**（None ≠ True），不是崩掉。
+        check("`_NoAlpha` 会被记下来（declared_no_alpha）",
+              getattr(ms, "declared_no_alpha", None) is True, str(ms))
+        check("报告里说明「这张底色没有 alpha」",
+              bool(ms) and "没有 alpha" in ms.summary(), (ms.summary() if ms else "没扫到"))
+
+
 def need_l4d2_model() -> tuple:
     """公开仓库前提（14-D）：真实模型来自 **L4D2 安装**，别人机器上多半没有。
 
@@ -673,7 +721,8 @@ def test_cli_readable_log():
         src = tmp / "src"
         src.mkdir()
         h = w = 8
-        imaging.save(np.dstack([np.full((h, w), 200, np.uint8)] * 3), src / "F-BaseColor-8.png")
+        imaging.save(np.dstack([np.full((h, w), 200, np.uint8)] * 3),
+                     src / "F-BaseColor-8_NoAlpha.png")   # 15-B：MB 的"无 alpha 底色"写法
         imaging.save(np.dstack([np.full((h, w), 128, np.uint8)] * 2
                                + [np.full((h, w), 255, np.uint8)]), src / "F-Normal-8.png")
         out = tmp / "out"
@@ -700,6 +749,142 @@ def test_cli_readable_log():
               str(rec["警告"])[:160])
         check("CLI 控制台也打了人话（不是 dict）", "⚠" in text and "{'code'" not in text,
               text[-200:].replace("\n", " / "))
+        # 15-B：文件名标了 `_NoAlpha` → 报告里要照说"这张底色没有 alpha"（机器记录 + 可读日志都有）
+        check("15-B：记录里说明这张底色没有 alpha",
+              "没有 alpha" in str(rec.get("底色 alpha", "")), str(rec.get("底色 alpha")))
+        check("15-B：可读日志里也有这句",
+              any("没有 alpha" in ln for ln in log.splitlines()), log[:0] or "")
+
+
+def test_slot_mapping():
+    """15-C：**逐槽各配一套素材** —— 两个槽各出一份 VMT、`$basetexture` 各指各自贴图，
+    产物按槽名命名互不覆盖，映射写进 `phong_input.json` 的 `逐槽映射`。
+    """
+    print("\n== 15-C：逐槽各配一套素材（两个槽） ==")
+    import json
+    import tempfile
+    from dataclasses import replace
+
+    from core import imaging, pipeline, settings, vmt, vtf
+
+    if not vtf.find_vtfcmd():
+        # 14-E：缺 VTFCmd 是公开仓库 / CI 的常态 → 说明并跳过（不报红）
+        print("   本机没有 VTFCmd.exe → 跳过这条端到端（公开仓库 / CI 上属正常）")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        dirs = []
+        for name, value in (("AlphaCouch", 60), ("BetaWall", 200)):
+            d = tmp / name
+            d.mkdir()
+            imaging.save(np.dstack([np.full((8, 8), value, np.uint8)] * 3),
+                         d / f"{name}-BaseColor-8.png")
+            dirs.append(d)
+        set_a = source_io.scan_folder(dirs[0])[0]
+        set_b = source_io.scan_folder(dirs[1])[0]
+
+        out = tmp / "out"
+        options = pipeline.ConvertOptions(source=str(dirs[0]), name="slotX",
+                                          out=str(out), cdmaterials="custom")
+        # 15-H：**逐槽参数**各归各 —— 只给第一个槽一条覆盖项，第二个槽不动
+        per_slot = {"school_gate": {"vmt.$surfaceprop": "metal"},
+                    "school_gate_windows": {}}
+        pairs = [("school_gate", set_a), ("school_gate_windows", set_b)]
+        for slot, ms in pairs:
+            opts = replace(options, name=slot, overrides=dict(per_slot[slot]))
+            res = pipeline.resolve_options(opts)         # 每个槽**各解析一次**
+            got = pipeline.convert_set(ms, opts, res, [slot], "custom", slot=slot)
+            check(f"槽 {slot} 跑成功（没被跳过）", not got["skipped"], str(got.get("skip_reason")))
+
+        check("两个槽各写一份 VMT",
+              (out / "school_gate.vmt").is_file() and (out / "school_gate_windows.vmt").is_file())
+        text_a = (out / "school_gate.vmt").read_text(encoding="utf-8", errors="replace")
+        text_b = (out / "school_gate_windows.vmt").read_text(encoding="utf-8", errors="replace")
+        base_a = vmt.parse(text_a).get("$basetexture", "")
+        base_b = vmt.parse(text_b).get("$basetexture", "")
+        check("$basetexture 各指各自贴图（且互不相同）",
+              base_a.endswith("school_gate_basecolor")
+              and base_b.endswith("school_gate_windows_basecolor")
+              and base_a != base_b, f"{base_a!r} / {base_b!r}")
+        check("产物按槽名命名、互不覆盖",
+              (out / "school_gate_basecolor.png").is_file()
+              and (out / "school_gate_windows_basecolor.png").is_file(),
+              str(sorted(p.name for p in out.glob("*.png"))))
+        # 15-H：逐槽参数 —— A 槽的 $surfaceprop 只落在 A 槽的 VMT 上，B 槽一点没沾
+        check("15-H：只给 A 槽改的表面类型落到 A 槽的 VMT",
+              '$surfaceprop' in text_a and 'metal' in text_a, text_a[-160:].replace("\n", " "))
+        check("15-H：B 槽没被 A 槽的参数污染",
+              '$surfaceprop' not in text_b or 'metal' not in text_b,
+              text_b[-160:].replace("\n", " "))
+        rec = json.loads((out / pipeline.RECORD_NAME).read_text(encoding="utf-8-sig"))
+        mapping = rec.get("逐槽映射") or {}
+        check("逐槽映射写进了 phong_input.json",
+              set(mapping) == {"school_gate", "school_gate_windows"}
+              and mapping["school_gate"]["素材"] == "AlphaCouch"
+              and mapping["school_gate_windows"]["素材"] == "BetaWall",
+              str(mapping)[:200])
+        check("15-H：逐槽参数按 `slot:<槽名>.<键>` 各归各",
+              mapping["school_gate"].get("覆盖项") == {"slot:school_gate.vmt.$surfaceprop": "metal"}
+              and mapping["school_gate_windows"].get("覆盖项") == {},
+              str({k: v.get("覆盖项") for k, v in mapping.items()}))
+
+        # 15-C 返工 / 缺陷 D 的**端到端**一条：底色名字认不出来 → 手工指认 → 真能转出 VMT
+        #   用户原话："我只需要一个 School_Gate01-BaseColor-awdjw-1k.png 就能直接让它少识别一张
+        #   基础色贴图" —— 指认之后必须跟正常素材一样跑通。
+        rw_dir = tmp / "Weird"
+        rw_dir.mkdir()
+        weird = rw_dir / "School_Gate01-BaseColor-awdjw-1k.png"
+        imaging.save(np.dstack([np.full((8, 8), 120, np.uint8)] * 3), weird)
+        imaging.save(np.dstack([np.full((8, 8), 90, np.uint8)] * 3),
+                     rw_dir / "School_Gate01-Roughness-8.png")
+        weird_set = source_io.scan_folder(tmp / "Weird")[0]
+        check("前提：这张底色认不出来（进了 unknown）",
+              [p.name for p in weird_set.unknown] == [weird.name] and weird_set.get("shader.base_color") is None,
+              str([p.name for p in weird_set.unknown]))
+        check("手工指成底色 → 这一步成功", weird_set.assign(weird, "shader.base_color"))
+        rw_out = tmp / "out-weird"
+        rw_opts = replace(options, name="School_Gate01", out=str(rw_out), force=True)
+        rw_res = pipeline.resolve_options(rw_opts)
+        got_w = pipeline.convert_set(weird_set, rw_opts, rw_res, ["School_Gate01"], "custom",
+                                     slot="School_Gate01")
+        check("15-C：指认之后**真的转换成功**（没被跳过、出了 VMT）",
+              not got_w["skipped"] and (rw_out / "School_Gate01.vmt").is_file(),
+              f"{got_w.get('skip_reason')} / {sorted(p.name for p in rw_out.glob('*'))}")
+
+
+def test_unknown_files():
+    """15-C 缺陷 D：文件名认不出类型的图**不许静默丢掉** —— 要列出来、还要能手工指定类型。"""
+    print("\n== 15-C 缺陷 D：认不出的图要被看见 ==")
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        d = tmp / "Gate"
+        d.mkdir()
+        (d / "Gate-Roughness-8.png").write_bytes(b"x")
+        weird = d / "Gate-BaseColor-awdjw-1k.png"      # 解析不出类型（老写法里被 continue 丢掉）
+        weird.write_bytes(b"x")
+        check("前提：这个名字确实认不出来", source_io.parse_filename(weird.name)[0] is None,
+              str(source_io.parse_filename(weird.name)))
+        ms = source_io.scan_folder(tmp)[0]
+        check("它被记进 unknown（不再静默丢）",
+              [p.name for p in ms.unknown] == [weird.name], str([p.name for p in ms.unknown]))
+        check("表格那一格会写清「认不出是什么」",
+              weird.name in ms.unrecognized_text() and "认不出" in ms.unrecognized_text(),
+              ms.unrecognized_text())
+        check("手工指定类型 → 当正常素材用",
+              ms.assign(weird, "shader.base_color") and ms.get("shader.base_color") == weird,
+              str(ms.images))
+        check("指定完 unknown 里就没有它了", not ms.unknown, str(ms.unknown))
+        check("没在 unknown 里的文件指不动（不乱指）",
+              ms.assign(tmp / "nope.png", "shader.metallic") is False)
+        # 「一张都没认出来、但有认不出的图」的那一套也要收进来（否则界面又"什么都不说"）
+        d2 = tmp / "OnlyWeird"
+        d2.mkdir()
+        (d2 / "whatever-1k.png").write_bytes(b"x")
+        items = source_io.scan_folder(tmp)
+        check("只有认不出的图 → 那一套也要出现在结果里",
+              any(it.group == "OnlyWeird" and len(it.unknown) == 1 for it in items),
+              str([(it.group, len(it.unknown)) for it in items]))
 
 
 def main() -> int:
@@ -708,6 +893,8 @@ def main() -> int:
     test_channels()
     test_sizes()
     test_source_io()
+    test_no_alpha_marker()
+    test_unknown_files()
     test_naming()
     test_vmt_and_validate()
     test_batch_skip()
@@ -720,6 +907,7 @@ def main() -> int:
     test_flat_maps_warning()
     test_list_materials()
     test_cli_readable_log()
+    test_slot_mapping()
     print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
     if FAIL:
         print("失败清单：")

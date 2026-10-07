@@ -297,12 +297,84 @@ STRINGS = {
                   "en": "Drop a baked texture folder here"},
     "btn.choose_folder": {"zh": "选择文件夹…", "en": "Choose folder…"},
     "label.recognized": {"zh": "已识别 {n} 套素材", "en": "{n} texture set(s) recognised"},
+    "label.added": {"zh": "已加 {added} 套 / 共 {total} 套", "en": "{added} added / {total} total"},
     "label.recognized_empty": {"zh": "还没有选择素材", "en": "No folder selected yet"},
+    # 15-C 缺陷 D：认不出的图必须被看见（状态行如实说 + 能手工指定类型）
+    "label.unknown": {"zh": "有 {k} 张没认出", "en": "{k} not recognised"},
+    "btn.assign_type": {"zh": "指定类型…", "en": "Set type…"},
+    "assign.title": {"zh": "这张图是什么？", "en": "What kind of map is this?"},
+    "assign.file": {"zh": "文件", "en": "File"},
+    "assign.type": {"zh": "类型", "en": "Type"},
+    "assign.hint": {"zh": "指着它当哪种图用 —— 指一次之后，它就跟正常素材一样参与转换。",
+                    "en": "Tell the tool which map this is; once assigned it is used like any "
+                          "recognised map."},
+    "assign.done": {"zh": "把 {name} 指成了「{type}」", "en": "Assigned {name} as “{type}”"},
     "label.output_choose": {"zh": "输出到：<点击选择>", "en": "Output to: <click to choose>"},
     "table.material": {"zh": "素材", "en": "Material"},
     "table.status": {"zh": "状态", "en": "Status"},
-    "table.progress": {"zh": "进度", "en": "Progress"},
-    "table.note": {"zh": "说明", "en": "Note"},
+    # 15-G：第 ① 页再也不当进度板 —— 只剩"导入了什么 / 认出了什么 / 什么没认出来"
+    "table.found": {"zh": "认到的图", "en": "Recognised maps"},
+    "table.unrecognized": {"zh": "没认出的", "en": "Not recognised"},
+    # 15-G：第 ④ 页结果清单（一行一个材质槽）
+    "result.slot": {"zh": "材质槽", "en": "Material slot"},
+    "result.used": {"zh": "用的素材", "en": "Texture set"},
+    "result.product": {"zh": "产物 / 失败原因", "en": "Output / reason"},
+    "result.produced": {"zh": "{png} PNG · {vtf} VTF · {vmt} VMT",
+                        "en": "{png} PNG · {vtf} VTF · {vmt} VMT"},
+    # 15-C：材质槽 ↔ 素材（模型模式 + 模型有多个材质槽时才出现）
+    "slots.title": {"zh": "材质槽 ↔ 素材", "en": "Material slots ↔ textures"},
+    "slots.each": {"zh": "每个槽各配一套素材", "en": "One texture set per slot"},
+    "slots.shared": {"zh": "所有槽共用一套贴图", "en": "All slots share one set"},
+    "slots.col_slot": {"zh": "材质槽", "en": "Material slot"},
+    "slots.col_set": {"zh": "这次用哪套素材", "en": "Texture set for this slot"},
+    "slots.none": {"zh": "（不用）", "en": "(skip)"},
+    "slots.pick": {"zh": "挑图…", "en": "Pick a folder…"},
+    "slots.add": {"zh": "浏览… 加一套素材", "en": "Browse… add a set"},
+    "slots.hint": {"zh": "每个槽用你选的那套贴图各出一份 VMT 与贴图；选「不用」的槽本次跳过。",
+                   "en": "Each slot writes its own VMT and maps from the set you pick; "
+                         "slots set to (skip) are left alone."},
+    "slots.page_prev": {"zh": "上一页", "en": "Previous"},
+    "slots.page_next": {"zh": "下一页", "en": "Next"},
+    "slots.page_info": {"zh": "第 {page} / {pages} 页", "en": "Page {page} of {pages}"},
+    "slots.auto_hint": {
+        "zh": "⚠ 这个模型有 {n} 个材质槽 —— 每个槽用你在下面选的那套贴图各写一份 VMT（各指各自贴图）。",
+        "en": "⚠ This model has {n} material slots — each slot writes its own VMT from the set "
+              "you pick below."},
+    "err.no_slot_set": {"zh": "先给至少一个材质槽选素材（或切回「所有槽共用一套贴图」）。",
+                        "en": "Pick a set for at least one slot (or switch back to sharing one set)."},
+    # 状态栏那两句（切模式时说话；15-C）
+    "slots.mode_each": {"zh": "每个槽各配一套素材 —— 每槽各出一份 VMT 与贴图",
+                        "en": "One set per slot — each slot writes its own VMT and maps"},
+    "slots.mode_shared": {"zh": "所有槽共用一套贴图 —— 模型里每个材质名各写一份 VMT",
+                          "en": "One set for all slots — one VMT per material name" },
+    # 15-H：第 ② / ③ 页顶部那个"正在编辑的槽"切换器
+    "slots.edit_label": {"zh": "正在编辑的槽：", "en": "Editing slot:"},
+    # 15-C：给一个槽配图的弹窗
+    "pick.title": {"zh": "配置这个槽的贴图 —— {slot}", "en": "Textures for slot {slot}"},
+    "pick.folder": {"zh": "素材文件夹", "en": "Texture folder"},
+    "pick.col_type": {"zh": "类型", "en": "Type"},
+    "pick.col_image": {"zh": "用这张图", "en": "Image"},
+    "pick.add": {"zh": "＋ 加一栏", "en": "+ Add row"},
+    "pick.del": {"zh": "－ 删一栏", "en": "- Remove row"},
+    "pick.need_folder": {"zh": "先选一个素材文件夹。", "en": "Pick a texture folder first."},
+    # 15-C 返工：基础色**必填**；认不出类型时醒目提示（用户 2026-10-08 就是被这个坑到转换失败）
+    "pick.need_basecolor": {
+        "zh": "「基础色」那一栏还没选图 —— 基础色是必填的（少了它转换没法做）。"
+              "文件名认不出类型时请手动在下拉里选。",
+        "en": "The Base colour row has no image — it is required (conversion cannot run without it). "
+              "If the filename does not reveal the type, pick it manually from the list."},
+    "pick.unrecognized": {
+        "zh": "有栏目没能从文件名认出类型 —— 请手动在下拉里选一张（基础色必填）。",
+        "en": "Some rows could not be recognised from the filename — pick them manually "
+              "(Base colour is required)."},
+    "btn.ok": {"zh": "确定", "en": "OK"},
+    "ptype.base_color": {"zh": "基础色", "en": "Base colour"},
+    "ptype.roughness": {"zh": "粗糙度", "en": "Roughness"},
+    "ptype.metallic": {"zh": "金属度", "en": "Metallic"},
+    "ptype.normal": {"zh": "法线", "en": "Normal"},
+    "ptype.ao": {"zh": "AO", "en": "AO"},
+    "ptype.alpha": {"zh": "Alpha", "en": "Alpha"},
+    "ptype.emission": {"zh": "自发光", "en": "Emission"},
 
     # ② 结果对比页（v1 占位）
 
@@ -422,9 +494,9 @@ STRINGS = {
     "naming.model_path": {"zh": "模型文件", "en": "Model file"},
     "naming.browse": {"zh": "浏览…", "en": "Browse…"},
     "naming.auto_hint": {
-        "zh": "拖入或选择 .mdl：工具会读出它编译时写死的目录与材质名，你就不用管了。",
-        "en": "Pick a .mdl: the tool reads the folder and material names baked in at compile time."},
-    "naming.read_ok": {"zh": "已读出：目录 {cdm} ｜ 材质 {names}",
+        "zh": "拖入或选择 .mdl —— 材质路径就写在模型里，工具直接读出来。",
+        "en": "Drop or pick a .mdl — the material path is stored inside the model."},
+    "naming.read_ok": {"zh": "读出来了：目录 {cdm} ｜ 材质 {names}",
                        "en": "Read: folder {cdm} | materials {names}"},
     "naming.read_fail": {"zh": "读不出来：{why}", "en": "Could not read it: {why}"},
     # 13-B 返工（一类 2026-10-01 实测更正）：**一次转换就给每个材质名各写一份 VMT**、都指向本次
@@ -449,17 +521,16 @@ STRINGS = {
     "eye.filter": {"zh": "图片 (*.png *.jpg *.jpeg *.tga *.bmp)",
                    "en": "Images (*.png *.jpg *.jpeg *.tga *.bmp)"},
     "eye.need_iris": {
-        "zh": "眼睛档需要一张虹膜图（必填）：在「参数表 / 材质属性」页的「眼睛专用图」那行点"
-              "「浏览…」选一张，或者换一个预设档。",
-        "en": "The Eyes preset needs an iris map (required): pick one under \"Eye textures\" on the "
-              "Parameter table page, or switch to another preset."},
+        "zh": "眼睛档要一张虹膜图：在「参数表 / 材质属性」页的「眼睛专用图」里选一张，或换一个档。",
+        "en": "The Eyes preset needs an iris map: pick one under “Eye textures” "
+              "(Parameter table page) or switch preset."},
     "eye.need_ao": {"zh": "眼睛 AO 那张图找不到（路径不对或文件没了）—— 清掉那一行或重新选一张。",
                     "en": "The eye AO image cannot be found (bad path or deleted) — clear that row "
                           "or pick it again."},
     "naming.final_path": {"zh": "将会写到：materials/{path}", "en": "Will be written to: materials/{path}"},
     "naming.manual_hint": {
-        "zh": "两栏必须与模型里编译时写的一致（工具不会替你改大小写）。",
-        "en": "Both fields must match what was compiled into the model (case is preserved)."},
+        "zh": "要和模型里写的一致；大小写不会被自动改。",
+        "en": "Must match the model; case is preserved as you type."},
 
     # 输出
     "output.deploy": {"zh": "直接写进游戏（推荐）", "en": "Write into the game (recommended)"},
@@ -473,13 +544,13 @@ STRINGS = {
     "route.brush": {"zh": "笔刷材质（Hammer 铺墙用）", "en": "Brush material (for Hammer)"},
     "route.mask": {"zh": "给笔刷出反射遮罩（默认出）", "en": "Reflection mask for brushes (on by default)"},
     "route.hint_model": {
-        "zh": "模型：高光走 exponent 贴图（VertexLitGeneric），适合武器 / 角色 / 道具。",
-        "en": "Model: specular via an exponent texture (VertexLitGeneric) — weapons, characters, props."},
+        "zh": "模型：高光来自 exponent 贴图（VertexLitGeneric）—— 武器 / 角色 / 道具用这个。",
+        "en": "Model: specular from the exponent map (VertexLitGeneric) — weapons, characters, props."},
     "route.hint_brush": {
-        "zh": "笔刷：L4D2 的笔刷没有 Phong，只出底色 + 法线（+ 可选反射遮罩）；明暗靠 lightmap，"
-              "材质在 Hammer 的材质浏览器里直接选（不需要 .mdl）。",
-        "en": "Brush: L4D2 brushes have no Phong — base color + normal (+ optional reflection mask). "
-              "Lighting comes from the lightmap; pick the material in Hammer's browser (no .mdl)."},
+        "zh": "笔刷：L4D2 的笔刷没有 Phong → 只出底色 + 法线（可选反射遮罩）；明暗靠 lightmap，"
+              "在 Hammer 里直接选（不需要 .mdl）。",
+        "en": "Brush: no Phong in L4D2 — base color + normal (optional reflection mask); "
+              "lighting comes from the lightmap (no .mdl needed)."},
 
     # 03 GUI 改版：三页结构 + 工具路径上第 1 页
     "tab.tuning": {"zh": "② 预览 + 调参", "en": "② Preview & tuning"},
@@ -499,11 +570,19 @@ STRINGS = {
                             "en": "Import textures on page ① first —\nthe images show up here"},
     "preview.none": {"zh": "（这套素材没有这张图）", "en": "(This texture set has no such map)"},
     "preview.zoom_title": {"zh": "放大预览", "en": "Zoom preview"},
-    "preview.hint": {"zh": "预览＝当前参数在内存里现算的结果（不写盘、不调 VTFCmd）。"
-                           "拖动拉条时这里不动，松手才重算。",
-                     "en": "This preview is recomputed in memory from the current settings "
-                           "(no files written, VTFCmd not called). Dragging a slider doesn't "
-                           "refresh it — releasing does."},
+    # 15-E：右框改成**简化 Blinn-Phong 渲染**（球 / 平板）+ 定位说明
+    "preview.shape": {"zh": "外形", "en": "Shape"},
+    "preview.shape_sphere": {"zh": "球", "en": "Sphere"},
+    "preview.shape_plane": {"zh": "方块", "en": "Flat panel"},
+    "preview.zoom_scale": {"zh": "缩放", "en": "Zoom"},
+    "preview.zoom_fit": {"zh": "适应窗口", "en": "Fit window"},
+    "preview.render_note": {"zh": "近似渲染，最终以 HLMV / 游戏为准",
+                            "en": "Approximate render — check HLMV / the game"},
+    "preview.brush_note": {"zh": "笔刷在 L4D2 没有 Phong，这里只是近似",
+                           "en": "No Phong for brushes in L4D2 — approximation only"},
+    "preview.hint": {"zh": "预览按当前参数现算（不写盘、不调 VTFCmd）；拖动时不刷新，松手才重算。",
+                     "en": "Recomputed in memory from the current settings (nothing written, "
+                           "VTFCmd not called); release a slider to refresh."},
 
     "paths.title": {"zh": "工具路径", "en": "Tool paths"},
     "export.conflict_hint": {
@@ -523,21 +602,21 @@ STRINGS = {
     "hlmv.label": {"zh": "HLMV 路径", "en": "HLMV path"},
     "hlmv.run": {"zh": "用 HLMV 看看", "en": "Open in HLMV"},
     "hlmv.run_desc": {
-        "zh": "用 L4D2 自带的 HLMV 打开上面那个模型。⚠️ 材质要先转换并部署进 materials（HLMV 只认游戏目录里的 VMT/VTF）；"
-              "⚠️ HLMV 没有 lightmap：看材质够用，看整体明暗要进游戏。",
-        "en": "Opens the model above in L4D2's HLMV. ⚠️ Convert and deploy into materials first (HLMV only reads VMT/VTF under the game folder). "
-              "⚠️ HLMV has no lightmap: fine for checking a material, not for judging overall lighting."},
+        "zh": "用 HLMV 打开这个模型。材质要先部署进 materials（HLMV 只读游戏目录里的 VMT/VTF）；"
+              "看材质够用，看明暗要进游戏。",
+        "en": "Opens the model in HLMV. Deploy into materials first (HLMV only reads the game folder); "
+              "no lightmap — use the game for overall lighting."},
     "hlmv.hint_configured": {"zh": "用你指定的：{path}", "en": "Using yours: {path}"},
     "hlmv.hint_default": {"zh": "自动找到的（默认位置）：{path}", "en": "Auto-detected (default): {path}"},
     "hlmv.hint_fallback_default": {
         "zh": "你指定的那个文件不在 → 改用默认位置：{path}",
         "en": "Your path doesn't exist → falling back to the default: {path}"},
     "hlmv.hint_missing": {
-        "zh": "没找到 HLMV。它一般在这个位置：{path}\n请点「浏览…」指定 hlmv.exe。",
-        "en": "HLMV not found. It usually lives here: {path}\nPlease use “Browse…” to point at hlmv.exe."},
+        "zh": "没找到 HLMV（一般在这里：{path}）—— 点「浏览…」指定 hlmv.exe。",
+        "en": "HLMV not found (usually {path}) — use “Browse…” to point at hlmv.exe."},
     "hlmv.no_model": {
-        "zh": "先在上面选一个 .mdl —— HLMV 得有模型才开得起来。",
-        "en": "Pick a .mdl first — HLMV needs a model to open."},
+        "zh": "先选一个 .mdl。",
+        "en": "Pick a .mdl first."},
     "hlmv.started": {"zh": "已启动 HLMV：{name}", "en": "HLMV launched: {name}"},
     "hlmv.failed": {"zh": "启动 HLMV 失败：{why}", "en": "Could not launch HLMV: {why}"},
 
@@ -548,16 +627,21 @@ STRINGS = {
     "status.skipped": {"zh": "跳过", "en": "Skipped"},
     "status.cancelled": {"zh": "已取消", "en": "Cancelled"},
     "err.no_folder": {"zh": "先选一个素材文件夹", "en": "Pick a texture folder first"},
-    "err.need_name": {"zh": "先填材质名（或用 .mdl 自动读）", "en": "Enter a material name (or use a .mdl)"},
+    "err.need_name": {
+        # 15-F：照一类对照表改。⚠️ 这里是 `QMessageBox`（**纯文本**，不是富文本）→ 对照表里的
+        # `<br>` 用 `\n` 落地，别把标签原样怼给用户；也不许带 Markdown 星号。
+        "zh": "模型线：先填材质名，或拖一个 .mdl 让它自己读\n"
+              "笔刷线：笔刷不用模型 —— 填一个材质名就能转",
+        "en": "Model: enter a name or drop a .mdl. Brush: no model needed — just enter a name."},
     # 拖进来的文件夹里认不出贴图 —— 这是**用户第一个动作就可能撞到**的地方，必须说人话。
     # （之前这里只是静默显示"还没有选择素材"，看起来像拖拽坏了）
     "err.empty_folder": {
         "zh": "这个文件夹里没找到能认的贴图：\n{path}\n\n"
-              "请选里面直接放着 PNG 的那个文件夹（Material Bakery 烘出来的那个），而不是它的上一级。\n"
-              "文件名里带 BaseColor / Roughness / Normal / Metallic 就能认出来。",
-        "en": "No recognisable textures in this folder:\n{path}\n\n"
-              "Pick the folder that directly contains the PNGs (the one Material Bakery wrote),\n"
-              "not its parent. Files named BaseColor / Roughness / Normal / Metallic are recognised."},
+              "要选直接放着 PNG 的那个文件夹（不是它的上一级）。\n"
+              "文件名带 BaseColor / Roughness / Normal / Metallic 就能认。",
+        "en": "No recognised textures here:\n{path}\n\n"
+              "Pick the folder that directly contains the PNGs (not its parent).\n"
+              "BaseColor / Roughness / Normal / Metallic are recognised."},
     "scan.done": {"zh": "识别到 {n} 套素材，可以点「开始转换」了",
                   "en": "{n} set(s) recognised — hit “Start” when ready"},
     "scan.none": {"zh": "这个文件夹里没认到贴图 —— 换个文件夹试试（见弹框里的说明）",

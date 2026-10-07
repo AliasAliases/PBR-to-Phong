@@ -22,6 +22,7 @@ core/     纯 Python 基础设施：不 import 任何 GUI、不 print（可 CLI 
   vmt.py       生成 .vmt 文本 + 解析（认得 patch/include）
   validate.py  校验模型：拿 .mdl 当权威查产物位置 / 贴图存在 / 大小写 / no_material
   deploy.py    写进 materials（同名冲突停下来问；⚠️ **不备份、不写清单、不可撤销** —— 用户 2026-09-25 拍板）
+  preview_render.py ★ 预览用的**简化 Blinn-Phong 渲染**（15-E：球 / 平板，纯 numpy、不写盘、不碰 Qt）
 cli/convert.py  端到端命令行：素材夹 → 3 张 PNG → VTF → .vmt →（可选）部署
                 多套串行、单个失败不影响其它、写 phong_input.json、重跑默认跳过已成功（--force 重跑）
 cli/validate.py 校验模型（`--all` 扫 models\custom 下全部）
@@ -31,9 +32,9 @@ i18n.py         双语文案表（约 155 条；每个参数 = 直译标签 + �
 run_gui.py      打包入口（源码运行等价 `python -m gui.main`）
 build_exe.py    打 onedir 包（PyInstaller；产物 `../dist/PBR2Phong/`）
 calib/build.py  标定实验包生成器（阶段 0 用，实验已结束）
-tests/          **十三个套件共 557 项**：test_pipeline 110 / test_gui_flow 97 / test_first_run 29 /
-                test_brush 39 / test_hlmv 24 / test_layout 52（零滚动 + 5 页版式 + 漏键/串语言/来源列/解释截断/片号/Markdown + 眼睛档零滚动）/
-                test_vtf_encoding 13 / test_neutral_params 39（默认值逐位一致锁）/ test_preview 28 /
+tests/          **十三个套件共 611 项**：test_pipeline 127 / test_gui_flow 116 / test_first_run 29 /
+                test_brush 39 / test_hlmv 24 / test_layout 57（零滚动 + 5 页版式 + 漏键/串语言/来源列/解释截断/片号/Markdown + 眼睛档零滚动 + 15-C 多材质槽零滚动）/
+                test_vtf_encoding 13 / test_neutral_params 39（默认值逐位一致锁）/ test_preview 41（含 15-E 的球/方块渲染）/
                 test_sliders 29 / test_presets 51（21 档预设 / 材质属性必填 / 术语表 / 附带两项 / 13-E 眼睛官方对齐）/
                 **test_transparency 26（透明裁剪：底色 alpha 保住 / VMT 只写 `$alphatest` / 没法线不许静默吞 / 没 alpha 要出声）**/
                 **test_warnings 20（12 单：警告 = 码 + 参数；27 条中文锚点逐字比对 / 全码英文渲染无中日韩字 / 逐码覆盖 / 旧 json 兼容 + 14-A 的 log 可读化）**
@@ -41,7 +42,7 @@ tests/          **十三个套件共 557 项**：test_pipeline 110 / test_gui_fl
 
 **跑测试的前提**（逐套件；缺前提的检查会**打印一行说明并跳过**，不会把整片报红 —— 公开仓库 / CI 上这很重要）：
 
-> 🆕 **14-E：全量跑法** = `python PBR2Phong/tests/run_all.py` —— **默认只打一行汇总**（例：`13 套件 · 557 项 · 失败 0`），
+> 🆕 **14-E：全量跑法** = `python PBR2Phong/tests/run_all.py` —— **默认只打一行汇总**（例：`13 套件 · 611 项 · 失败 0`），
 > 失败才列失败套件与那几条 ✗；`--verbose` 出明细、`--only test_pipeline,test_warnings` 只跑指定套件、`--list` 列名字。
 > **日常只跑受影响的 1~3 个套件**（改哪儿跑哪儿的地图写在 `_task/README.md`「测试与 token 经济性」），
 > **全量留给片收口 / CI**（`.github/workflows/tests.yml`：push 与 PR 都在 windows-latest 上跑一遍）。
@@ -80,7 +81,11 @@ tests/          **十三个套件共 557 项**：test_pipeline 110 / test_gui_fl
   ⚠️ 两点使用说明：① **眼睛档仍会一并输出底色 / 法线 / 指数图**（那是既有产物链路，`EyeRefract` 用不到它们 ——
   **可以忽略、不用管**）；② 命令行指定虹膜图：`python -m cli.convert <素材> --preset 角色-眼睛 --set eye.iris=<图片路径>`
   （可选 `--set eye.ao=<图片路径>`）。缺虹膜图会当场给人话提示，不会静默兜底。
-- **自动化检查 557 项全绿（13 套件）**（见上；缺 VTFCmd / L4D2 的少数几条会跳过并说明）
+- **15-E 预览改成渲染图**：右框不再是 512 缩略贴图，而是拿**当前参数现算的贴图**做**简化
+  Blinn-Phong** 着色（`core/preview_render.py`，纯 numpy、内存现算、不写盘）；**球 / 方块**可切
+  （笔刷档默认方块＝铺墙感），**按控件尺寸渲染**，改外形 / 换图种 / 窗口大小都只重渲一次；
+  ⚠️ 它是**近似**（不是引擎 Phong、不跑 lightmap）—— 界面右下角保留定位文案「最终以 HLMV / 游戏为准」。
+- **自动化检查 611 项全绿（13 套件）**（见上；缺 VTFCmd / L4D2 的少数几条会跳过并说明）
 - **已重新打出 onedir 包**：`python build_exe.py` → `../dist/PBR2Phong/PBR2Phong.exe`（发布文档 `../README.md`、`../LICENSE`、`../THIRD_PARTY_LICENSES.md`）
   —— **14-B 起，这三份会由 `build_exe.py` 自动拷进 `dist/PBR2Phong/`**（包里带 Qt LGPLv3，许可文本必须随包）；
   ⚠️ 它们是**拷贝**：改了 `LICENSE`/`README.md`/`THIRD_PARTY_LICENSES.md` 就要**重打一次**。

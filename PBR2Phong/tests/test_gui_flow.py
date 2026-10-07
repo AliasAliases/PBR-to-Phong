@@ -27,7 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WS = ROOT.parent
 sys.path.insert(0, str(ROOT))
 
-from PySide6 import QtCore, QtWidgets  # noqa: E402
+import numpy as np  # noqa: E402
+from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 from core import settings  # noqa: E402
 from gui.main import Cancelled, ConvertWorker, MainWindow  # noqa: E402
@@ -168,10 +169,20 @@ def main() -> int:
         # ⚠️ 13-B 返工（一类 2026-10-01）：这条**原来锁的是错的措辞**（"要分几次跑"）——
         #    实测是"一次转换就给每个名字各写一份 VMT、都指向本次这套贴图"，只有"不同材质槽配
         #    不同贴图"才需要分开跑。现在锁**正确的那半句**，并断言那句错的短语已经消失。
-        check("13-B：多材质会说清「每个名字各写一份 VMT、都指向这次的贴图」",
-              "各写一份 VMT" in hint and "都指向" in hint and "不同贴图" in hint
-              and "分几次跑" not in hint,
-              hint.replace("\n", " / ")[:220])
+        # 15-C：多槽模型现在有**两种**说法 —— 「共用一套贴图」（13-B 的措辞）与「逐槽各配一套」
+        #       → 两条都锁住（13-B 那条改成在"共用"模式下读，措辞要求逐字不变）
+        page.rb_slots_shared.setChecked(True)
+        app.processEvents()
+        hint_shared = page.lbl_model_hint.text()
+        check("13-B：共用一套贴图时说清「每个名字各写一份 VMT、都指向这次的贴图」",
+              "各写一份 VMT" in hint_shared and "都指向" in hint_shared
+              and "不同贴图" in hint_shared and "分几次跑" not in hint_shared,
+              hint_shared.replace("\n", " / ")[:220])
+        page.rb_slots_each.setChecked(True)
+        app.processEvents()
+        hint_each = page.lbl_model_hint.text()
+        check("15-C：逐槽模式的说法换成「每个槽各写一份 VMT（各指各自贴图）」",
+              "每个槽" in hint_each and "各指各自贴图" in hint_each, hint_each.replace("\n", " / ")[:220])
         check("13-B：材质名**可以选中复制**（不用去别处翻 MDL）",
               bool(page.lbl_model_hint.textInteractionFlags() & QtCore.Qt.TextSelectableByMouse),
               str(page.lbl_model_hint.textInteractionFlags()))
@@ -207,11 +218,34 @@ def main() -> int:
     for _ in range(5):
         app.processEvents()
 
-    status = page.table.item(0, 1).text()
-    note = page.table.item(0, 3).text()
-    print(f"     表格：{page.table.item(0,0).text()} | {status} | {note}")
+    # 15-G（用户原话："目前的导入素材框里为啥要加个进度？？？转换结果都在导出页能看完了
+    #       还用专门切回第一页检查？"）：第 ① 页那张表**一条状态都不留**，结果在第 ④ 页。
+    headers = [page.table.horizontalHeaderItem(c).text() for c in range(page.table.columnCount())]
+    print(f"     第①页表头：{headers}")
     print(f"     状态栏：{win.lbl_status.text()}  进度 {win.progress.value()}%")
-    check("第一行状态 = 完成", status == win.t("status.done_one"), status)
+    check("15-G：第 ① 页表格没有「进度」列", "进度" not in headers and "Progress" not in headers,
+          str(headers))
+    check("15-G：第 ① 页表格也没有「状态」列",
+          "状态" not in headers and "Status" not in headers, str(headers))
+    check("15-G：第 ① 页表格里没有任何状态字",
+          not any(page.table.item(r, c) and page.table.item(r, c).text() in
+                  (win.t("status.ready"), win.t("status.done_one"),
+                   win.t("status.failed"), win.t("status.skipped"))
+                  for r in range(page.table.rowCount())
+                  for c in range(page.table.columnCount())),
+          str([page.table.item(0, c).text() for c in range(page.table.columnCount())]))
+    win.tabs.setCurrentIndex(3)                      # 人停在「④ 导出」页：**没切回第 1 页**
+    app.processEvents()
+    check("15-G：人在第 ④ 页（没切回第 ① 页）", win.tabs.currentIndex() == 3,
+          str(win.tabs.currentIndex()))
+    slots = [exp.tbl_result.item(r, 0).text() for r in range(exp.tbl_result.rowCount())]
+    stats = [exp.tbl_result.item(r, 2).text() for r in range(exp.tbl_result.rowCount())]
+    used = [exp.tbl_result.item(r, 1).text() for r in range(exp.tbl_result.rowCount())]
+    print(f"     ④ 页结果表：{list(zip(slots, used, stats))}")
+    check("15-G：第 ④ 页按材质槽逐行列出结果", bool(slots), str(slots))
+    check("15-G：每槽都有状态", bool(stats) and all(s == win.t("status.done_one") for s in stats),
+          str(stats))
+    check("15-G：清单里有材质名 GuiFlow", any("GuiFlow" in s for s in slots), str(slots))
     check("进度到 100%", win.progress.value() == 100, str(win.progress.value()))
     check("结束后按钮恢复", win.btn_start.isEnabled() and not win.btn_cancel.isEnabled())
     # 13-C：GUI 侧证据 —— 撞上已有产物时，**真的把冲突交到用户面前了**（码 `exists`，不是人话）
@@ -246,9 +280,12 @@ def main() -> int:
     check("跑完后出现结果清单", exp.grp_result.isVisibleTo(exp))
     check("汇总行与状态栏一致", exp.lbl_result.text() == win.lbl_status.text(),
           exp.lbl_result.text())
-    check("清单里列了素材名", "GuiFlow" in exp.txt_result.toPlainText(),
-          exp.txt_result.toPlainText()[:120])
-    check("清单里带了日志路径", bool(win.last_log) and win.last_log in exp.txt_result.toPlainText())
+    check("清单里列了素材名",
+          any("GuiFlow" in (exp.tbl_result.item(r, 0).text() or "")
+              for r in range(exp.tbl_result.rowCount())),
+          str([exp.tbl_result.item(r, 0).text() for r in range(exp.tbl_result.rowCount())]))
+    check("清单里带了日志路径",
+          bool(win.last_log) and win.last_log in exp.lbl_log_path.text(), exp.lbl_log_path.text())
     check("「打开输出目录」可用且指向产物",
           exp.btn_open_out.isEnabled() and win.last_out_dir == str(out), str(win.last_out_dir))
     check("「打开日志」可用", exp.btn_open_log.isEnabled(), str(win.last_log))
@@ -494,6 +531,301 @@ def main() -> int:
     sp.reset_overrides()
     pick_preset(sp.cmb_preset, "植被")
     app.processEvents()
+
+    # ⑭ 15-D：多文件夹拖入要**累加**（用户原话："我想通过放置多个文件夹进去达成添加素材都不行"）
+    drop_root = Path(tempfile.mkdtemp(prefix="pbr2phong-drop-"))
+    d1, d2 = drop_root / "SetA", drop_root / "SetB"
+    for d, stem in ((d1, "DropA"), (d2, "DropB")):
+        d.mkdir(parents=True)
+        (d / f"{stem}-BaseColor-8.png").write_bytes(b"x")   # scan_folder 只看后缀，不读内容
+    before = len(page.sets)
+
+    def drop(paths):
+        """真发一个 drop 事件（= 用户把文件夹拖进那个框），走的就是 `eventFilter` 那条路。"""
+        mime = QtCore.QMimeData()
+        mime.setUrls([QtCore.QUrl.fromLocalFile(str(p)) for p in paths])
+        ev = QtGui.QDropEvent(QtCore.QPointF(8, 8), QtCore.Qt.CopyAction, mime,
+                              QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        page.eventFilter(page.drop, ev)
+        app.processEvents()
+
+    drop([d1, d2])
+    check("15-D：一次拖 2 个目录 → 两套都加进来了", len(page.sets) - before == 2,
+          f"{before} → {len(page.sets)}")
+    check("15-D：表格跟着长（行数 = 套数）", page.table.rowCount() == len(page.sets))
+    check("15-D：状态行说「已加 N 套 / 共 M 套」",
+          f"共 {len(page.sets)} 套" in page.lbl_recognized.text(), page.lbl_recognized.text())
+    drop([d1])                                          # 同一个目录再拖一次
+    check("15-D：同一目录拖两次 → 仍是一套（按绝对路径去重）", len(page.sets) - before == 2,
+          f"{before} → {len(page.sets)}")
+    page.table.selectRow(0)
+    page.remove_selected()
+    app.processEvents()
+    check("15-D：删掉一套后剩一套", len(page.sets) - before == 1, f"剩 {len(page.sets) - before}")
+    check("15-D：表格也跟着掉一行", page.table.rowCount() == len(page.sets))
+
+    # ⑮ 15-C：材质槽 ↔ 素材（真模型 + 每个槽一套素材）
+    mdl = need_l4d2_model()
+    if mdl is None:
+        print("   ⏭ 跳过 15-C 那段：没找到 L4D2 的真实模型 school_gate.mdl（公开仓库里属正常）")
+    else:
+        from core import naming as _naming
+        slots_all = [t for t in _naming.read_mdl(mdl).textures if t.lower() != "no_material"]
+        slots_tmp = Path(tempfile.mkdtemp(prefix="pbr2phong-slots-"))
+        for idx, slot in enumerate(slots_all):
+            d = slots_tmp / slot
+            d.mkdir(parents=True)
+            # 每套给个**不一样的亮度** → 后面"切槽预览像素会变"才测得出真东西
+            from core import imaging as _im
+            _im.save(np.dstack([np.full((8, 8), 40 + 60 * idx, np.uint8)] * 3),
+                     d / f"{slot}-BaseColor-8.png")
+        page.load_folder(slots_tmp)                 # 一次导入好几套（15-D 的累加）
+        page.ed_model.setText(str(mdl))
+        app.processEvents()
+        check("15-C：模型有多个槽 → 出现「材质槽 ↔ 素材」这一块",
+              page.grp_slots.isVisibleTo(page), str(page.grp_slots.isVisibleTo(page)))
+        shown = [page.slot_table.item(r, 0).text() for r in range(page.slot_table.rowCount())]
+        check("15-C：列出**全部**材质槽（不止第一个）", set(shown) == set(slots_all),
+              f"模型里={slots_all} 表里={shown}")
+        check("15-C：默认「每个槽各配一套素材」", page.rb_slots_each.isChecked())
+        jobs = page.slot_jobs() or []
+        check("15-C：按「素材组名 ↔ 槽名」自动填好了",
+              len(jobs) == len(slots_all) and {j[0] for j in jobs} == set(slots_all),
+              str([(s, ms.group) for s, ms in jobs]))
+        page.rb_slots_shared.setChecked(True)
+        app.processEvents()
+        check("15-C：切「所有槽共用一套贴图」→ 不再按槽分活", page.slot_jobs() is None)
+        page.rb_slots_each.setChecked(True)
+        page.ed_model.clear()                       # 清掉模型 → 这一块要收起来（免得赖着不走）
+        app.processEvents()
+        check("15-C：模型清空后这一块收起（槽名不留残影）",
+              not page.grp_slots.isVisibleTo(page) and not page._model_names,
+              str(page._model_names))
+
+        # ⑯ 15-C **返工**（用户 2026-10-08 实机）：底色改名成认不出的 → 手选之后
+        #    预览与转换必须**用同一份数据**（以前预览读另一份 → "我明明选了还说没有"）
+        print("== 15-C 返工：手选底色 ==")
+        from gui.main import SlotPickerDialog
+        from core import source_io as _sio
+
+        rw = Path(tempfile.mkdtemp(prefix="pbr2phong-rework-"))
+        d = rw / "School_Gate00"
+        d.mkdir(parents=True)
+        from core import imaging as _imaging
+        for name in ("School_Gate00-Roughness-8.png", "School_Gate00-shaded-8.png"):
+            _imaging.save(np.dstack([np.full((8, 8), 128, np.uint8)] * 3), d / name)
+        renamed = d / "School_Gate00-shaded-8.png"                  # ← 底色改名成**认不出的**
+        check("15-C 返工：改名的底色确实认不出来（前提对）",
+              _sio.parse_filename(renamed.name)[0] is None,
+              str(_sio.parse_filename(renamed.name)))
+
+        page.sets.clear()                           # 前面那几段留下的同名素材别混进来
+        page._set_folders.clear()
+        page._added_folders.clear()
+        page.slot_state.clear()
+        page.current_slot = ""
+        page.load_folder(rw)
+        page.ed_model.setText(str(mdl))
+        app.processEvents()
+        slot = "School_Gate00"
+        target = (page.slot_state.get(slot) or {}).get("set")
+        check("15-C 返工：这一套落在槽上（自动匹配到组名）", target is not None, str(target))
+        check("15-C 返工：自动匹配来的那套**没有**底色（缺陷现场）",
+              target is not None and target.get("shader.base_color") is None,
+              str(None if target is None else sorted(target.images)))
+        # 15-C 缺陷 D：**认不出的那张必须被看见**（列在表里 + 状态行说出来）
+        check("15-C D：认不出的图进了 `unknown`（不再被静默丢掉）",
+              target is not None and [Path(p).name for p in target.unknown] == [renamed.name],
+              str(None if target is None else [Path(p).name for p in target.unknown]))
+        page.table.selectRow(0)
+        app.processEvents()
+        cell = page.table.item(0, 2).text()
+        check("15-C D：导入表里列出它、并标明「认不出是什么」",
+              renamed.name in cell and "认不出" in cell, cell[:80])
+        check("15-C D：状态行如实说「有 1 张没认出」",
+              "1 张没认出" in page.lbl_recognized.text(), page.lbl_recognized.text())
+        check("15-C D：「指定类型…」按钮在有认不出的图时可用", page.btn_assign_type.isEnabled())
+
+        # 打开配图窗（不走文件对话框：直接喂文件夹），只手动选「基础色」那一栏
+        dlg = SlotPickerDialog(win, slot, parent=page, target=target, folder=d)
+        base_row = dlg.rows[0]
+        check("15-C 返工：认不出类型时**醒目提示**「基础色必填」",
+              dlg.lbl_warn.isVisible() or bool(dlg.lbl_warn.text()),
+              f"visible={dlg.lbl_warn.isVisible()} text={dlg.lbl_warn.text()[:40]}")
+        check("15-C 返工：认不出的那栏自动预选是空的（等人手选）",
+              base_row[1].currentData() is None, str(base_row[1].currentData()))
+        base_row[1].setCurrentIndex(base_row[1].findData(str(renamed)))
+        boxes = []
+        old_info = QtWidgets.QMessageBox.information
+        QtWidgets.QMessageBox.information = staticmethod(
+            lambda *a, **k: boxes.append([str(x) for x in a]))
+        try:
+            dlg.on_ok()
+        finally:
+            QtWidgets.QMessageBox.information = old_info
+        check("15-C 返工：选好基础色后确定放行（没弹拦截框）",
+              not boxes and dlg.result_set is not None, str(boxes)[:120])
+        check("15-C 返工：改的就是**同一份**素材数据（不是另造一份）",
+              dlg.result_set is target, f"{dlg.result_set} vs {target}")
+
+        page.slot_state[slot]["set"] = dlg.result_set
+        page.slot_state[slot]["label"] = dlg.result_label
+        page.slot_state[slot]["folder"] = d
+        page.current_slot = slot
+        page.rebuild_slots()
+        win.page_tuning.preview.cmb_kind.setCurrentIndex(
+            win.page_tuning.preview.cmb_kind.findData("basecolor"))
+        win.refresh_preview(force=True)
+        app.processEvents()
+        check("15-C 返工：预览与转换同源（预览拿的就是槽那套）",
+              page.slot_set() is target, str(page.slot_set()))
+        check("15-C 返工：预览**立刻**能看到那张底色（不再是「没有这张图」）",
+              win.page_tuning.preview.right.has_image,
+              win.page_tuning.preview.right.canvas.text()[:60].replace("\n", "⏎"))
+        rw_jobs = {s: ms for s, ms in (page.slot_jobs() or [])}
+        check("15-C 返工：转换那一路拿到的也是同一份、且已带底色",
+              rw_jobs.get(slot) is target
+              and rw_jobs[slot].get("shader.base_color") == renamed,
+              str(rw_jobs.get(slot) and rw_jobs[slot].get("shader.base_color")))
+
+        # ③ 基础色留空 → 确定必须被拦住（人话）
+        dlg2 = SlotPickerDialog(win, slot, parent=page, target=None, folder=d)
+        boxes2 = []
+        QtWidgets.QMessageBox.information = staticmethod(
+            lambda *a, **k: boxes2.append([str(x) for x in a]))
+        try:
+            dlg2.on_ok()
+        finally:
+            QtWidgets.QMessageBox.information = old_info
+        check("15-C 返工：基础色没选 → 确定被拦住",
+              len(boxes2) == 1 and dlg2.result_set is None, str(boxes2)[:160])
+        check("15-C 返工：拦住时说人话（点名「基础色」）",
+              bool(boxes2) and "基础色" in boxes2[0][2], str(boxes2)[:160])
+
+        # 15-C 缺陷 D：**手工指定类型**这条路（单独造一套，免得跟上面对上）
+        da = Path(tempfile.mkdtemp(prefix="pbr2phong-assign-")) / "School_Gate02"
+        da.mkdir(parents=True)
+        _imaging.save(np.dstack([np.full((8, 8), 200, np.uint8)] * 3),
+                      da / "School_Gate02-Roughness-8.png")
+        weird = da / "School_Gate02-basemap-weird-1k.png"
+        _imaging.save(np.dstack([np.full((8, 8), 90, np.uint8)] * 3), weird)
+        page.sets.clear()
+        page._set_folders.clear()
+        page._added_folders.clear()
+        page.load_folder(da.parent)
+        page.table.selectRow(0)
+        app.processEvents()
+        ms2 = page.sets[0]
+        check("15-C D：这一套认不出那张进了 unknown", [Path(p).name for p in ms2.unknown] == [weird.name],
+              str([Path(p).name for p in ms2.unknown]))
+
+        def fake_exec(self):                      # 「确定」= 选成底色的那个类型
+            self.cmb_type.setCurrentIndex(self.cmb_type.findData("shader.base_color"))
+            self.on_ok()
+            return 1
+
+        real_exec2 = QtWidgets.QDialog.exec
+        QtWidgets.QDialog.exec = fake_exec
+        try:
+            page.assign_type_dialog(preselect=weird.name)
+        finally:
+            QtWidgets.QDialog.exec = real_exec2
+        app.processEvents()
+        check("15-C D：手工指定类型后它变成正常素材（进了 images）",
+              ms2.get("shader.base_color") == weird, str(ms2.get("shader.base_color")))
+        check("15-C D：指定完就不再算「没认出」（unknown 清掉、状态行也不再提）",
+              not ms2.unknown and "没认出" not in page.lbl_recognized.text(),
+              f"unknown={ms2.unknown} 状态行={page.lbl_recognized.text()}")
+        check("15-C D：表格里它挪到「认到的图」那一格、不再挂在「没认出的」",
+              weird.name not in page.table.item(0, 2).text()
+              and "底色" in page.table.item(0, 1).text(),
+              f"{page.table.item(0, 1).text()} ｜ {page.table.item(0, 2).text()}")
+        page.ed_model.clear()
+        app.processEvents()
+
+        # ⑰ 15-H：第 ②/③ 页按材质槽分开编辑
+        print("== 15-H：逐槽参数 ==")
+        per = Path(tempfile.mkdtemp(prefix="pbr2phong-perslot-"))
+        for idx, slot in enumerate(slots_all):
+            d = per / slot
+            d.mkdir(parents=True)
+            _imaging.save(np.dstack([np.full((8, 8), 40 + 60 * idx, np.uint8)] * 3),
+                          d / f"{slot}-BaseColor-8.png")
+        page.sets.clear()
+        page._set_folders.clear()
+        page._added_folders.clear()
+        page.slot_state.clear()
+        page.current_slot = ""
+        page.load_folder(per)
+        page.ed_model.setText(str(mdl))
+        app.processEvents()
+        cfg = win.page_config
+        preview = win.page_tuning.preview
+        check("15-H：第 ② 页出现「正在编辑的槽」", win.page_tuning.cmb_slot.isVisibleTo(win.page_tuning))
+        check("15-H：第 ③ 页也有，且列全部槽",
+              cfg.cmb_slot.isVisibleTo(cfg)
+              and [cfg.cmb_slot.itemData(i) for i in range(cfg.cmb_slot.count())] == slots_all,
+              str([cfg.cmb_slot.itemData(i) for i in range(cfg.cmb_slot.count())]))
+        a, b = slots_all[0], slots_all[1]
+        check("15-H：默认编辑第一个槽", page.current_slot == a, page.current_slot)
+        # 15-H 返工：切换器要在**右边**（贴参数列），不许横在页面顶部
+        win.tabs.setCurrentIndex(1)                  # 先真的切到第 ② 页，布局才算得出来
+        for _ in range(3):
+            app.processEvents()
+        pos = win.page_tuning.cmb_slot.mapTo(win.page_tuning, QtCore.QPoint(0, 0))
+        check("15-H 返工：切换器贴在**右边**那一列（在预览区右侧）",
+              pos.x() > win.page_tuning.preview.width(),
+              f"槽下拉 x={pos.x()} 预览宽={win.page_tuning.preview.width()}")
+        win.tabs.setCurrentIndex(0)
+        app.processEvents()
+        # 15-H 返工2：第 ③ 页那个槽下拉要在**左边**（第 ② 页的保持右边）
+        win.tabs.setCurrentIndex(2)
+        for _ in range(3):
+            app.processEvents()
+        pos3 = cfg.cmb_slot.mapTo(cfg, QtCore.QPoint(0, 0))
+        check("15-H 返工2：第 ③ 页的槽下拉在**左边**",
+              pos3.x() < cfg.width() // 2, f"x={pos3.x()} 页宽={cfg.width()}")
+        win.tabs.setCurrentIndex(0)
+        app.processEvents()
+        cfg.cmb_sp.setCurrentIndex(cfg.cmb_sp.findData("metal"))
+        app.processEvents()
+        check("15-H：表面类型记在 A 槽名下",
+              win.overrides_for(a).get("vmt.$surfaceprop") == "metal", str(win.overrides_for(a)))
+        win.set_edit_slot(b)
+        app.processEvents()
+        check("15-H：切到 B 槽 → B 没被 A 的表面类型污染",
+              win.overrides_for(b).get("vmt.$surfaceprop") is None, str(win.overrides_for(b)))
+        check("15-H：界面也回到继承值（不是 A 那个）",
+              cfg.cmb_sp.currentData() != "metal", str(cfg.cmb_sp.currentData()))
+        panel.sl_sharp.setSliderDown(True)
+        panel.sl_sharp.setValue(90)
+        panel.sl_sharp.setSliderDown(False)
+        panel.sl_sharp.sliderReleased.emit()
+        app.processEvents()
+        check("15-H：B 槽自己的锐度被记下来",
+              "curve.sharpness_gain" in win.overrides_for(b), str(win.overrides_for(b)))
+        win.set_edit_slot(a)
+        app.processEvents()
+        check("15-H：切回 A 槽 → A 的表面类型还在", cfg.cmb_sp.currentData() == "metal",
+              str(cfg.cmb_sp.currentData()))
+        check("15-H：A 槽的滑杆**没落到** B 槽（A 的锐度不是 B 那个 90）",
+              panel.param_rows["sharpness"][1].value() != 90,
+              f"A 的锐度={panel.param_rows['sharpness'][1].value()} B 的=90")
+        check("15-H：A 槽自己没有那条锐度覆盖",
+              "curve.sharpness_gain" not in win.overrides_for(a), str(win.overrides_for(a)))
+        win.set_edit_slot(b)
+        app.processEvents()
+        img_b = np.array(preview.right.image_array) if preview.right.has_image else None
+        win.set_edit_slot(a)
+        app.processEvents()
+        img_a = np.array(preview.right.image_array) if preview.right.has_image else None
+        check("15-H：切槽后预览像素随之变化", img_a is not None and img_b is not None
+              and not np.array_equal(img_a, img_b), f"A/B 都出图={img_a is not None and img_b is not None}")
+        page.ed_model.clear()
+        app.processEvents()
+        check("15-H：模型清空 → 切换器收起",
+              not win.page_tuning.cmb_slot.isVisibleTo(win.page_tuning)
+              and not cfg.cmb_slot.isVisibleTo(cfg))
 
     print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
     for f in FAIL:

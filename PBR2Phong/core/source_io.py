@@ -55,6 +55,32 @@ _SEPARATORS = re.compile(r"[-_\s.]+")
 _SIZE_TOKEN = re.compile(r"^(\d+)([kK])?(px)?$")
 _SIZE_PAIR = re.compile(r"^(\d+)([kK])?[x×](\d+)([kK])?(px)?$")
 
+# ---- Material Bakery 新写法：**没有 alpha 的底色 = 正名 + `_NoAlpha`**（15-B）----------------
+# 规则（照抄 MB 的 `naming.NO_ALPHA_SUFFIX = "_NoAlpha"`，UDIM 瓦片号插在标记**后面**）：
+#   · 带 alpha 的底色   = 正名            `Body-BaseColor-2k.png`
+#   · 没有 alpha 的底色 = 正名 + `_NoAlpha` `Body-BaseColor-2k_NoAlpha.png`
+#   · UDIM 瓦片         = 标记之后再插瓦片号 `Body-BaseColor-2k_NoAlpha.1001.png`
+# ⚠️ **必须在解析之前剥掉**：不剥的话尾段会被"粘着写法"回退当成"以 alpha 结尾" → 认成 `shader.alpha`，
+#    底色就被**静默**丢进 `ignored`。MB 的 `_strip_no_alpha_marker()` 注释里踩的是同一个坑。
+# 口径与 MB 一致：**前面必须是分隔符或行首、后面必须是结尾或 `.瓦片号`** ——
+# 用户自己起的 `NoAlphaFoo-BaseColor-2k` 不许误伤（后面跟的是 `F`，不匹配）。
+_NO_ALPHA_MARKER = re.compile(r"(?:^|[ _\-.])no[ _\-]?alpha(?=$|\.\d)", re.IGNORECASE)
+_UDIM_SUFFIX = re.compile(r"\.(\d{4})$")           # `….1001` = 瓦片号，不是尺寸
+_UDIM_RANGE = (1001, 1100)                          # UDIM 的合法瓦片号区间（1001+u+10v）
+
+
+def strip_no_alpha_marker(stem: str) -> tuple:
+    """剥掉 `_NoAlpha` 标记 → (剥完的名字, 是否带标记)。"""
+    text = str(stem)
+    m = _NO_ALPHA_MARKER.search(text)
+    if not m:
+        return text, False
+    return text[:m.start()] + text[m.end():], True
+
+
+def _is_udim_tile(token: str) -> bool:
+    return token.isdigit() and _UDIM_RANGE[0] <= int(token) <= _UDIM_RANGE[1]
+
 
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(text).lower())
@@ -87,12 +113,19 @@ def _trailing_alnum(text: str, count: int) -> int:
 def parse_filename(filename: str) -> tuple:
     """文件名 → (type_key|None, 宽, 高, 前缀)。认不出 type_key 返回 None（不猜）。"""
     stem = Path(str(filename)).stem
+    stem, _declared = strip_no_alpha_marker(stem)   # 15-B：先剥标记，别让它冒充 alpha 图
+    stem = _UDIM_SUFFIX.sub("", stem)               # 15-B：瓦片号不参与类型/尺寸解析
     parts = [p for p in _SEPARATORS.split(stem) if p]
     if not parts:
         return None, 0, 0, ""
 
     size_x = size_y = 0
-    while len(parts) > 1 and parse_size(parts[-1])[0]:
+    while len(parts) > 1:
+        if _is_udim_tile(parts[-1]):                # 15-B：尺寸后面可能还挂着瓦片号
+            parts.pop()
+            continue
+        if not parse_size(parts[-1])[0]:
+            break                                   # 尺寸**不一定是末段**，但也不是任意段
         size_x, size_y = parse_size(parts.pop())
 
     for width in (3, 2, 1):                     # 从右往左拼 1~3 段找类型
@@ -120,6 +153,8 @@ class MaterialSet:
     sizes: dict = field(default_factory=dict)      # {type_key: (w, h)}
     source: str = "filename"                       # filename / manifest
     ignored: list = field(default_factory=list)    # 认出来但 v1 不用的类型
+    unknown: list = field(default_factory=list)    # 15-C 缺陷 D：文件名认不出类型的图（**必须被看见**）
+    declared_no_alpha: bool = False                # 15-B：文件名标了 `_NoAlpha` = 这张底色没有 alpha
 
     def get(self, *keys):
         for k in keys:
@@ -131,12 +166,55 @@ class MaterialSet:
     def normal(self):
         return self.get(*NORMAL_KEYS)
 
+    def images_text(self) -> str:
+        """15-G：第 ① 页表格「认到的图」那一格的内容（**不含组名** —— 组名自己占一列）。
+
+        ⚠️ 那里只回答"你导入了什么、认出了什么"：**一条状态都不许出现**（进度/完成与否属于
+        第 ④ 页与底部状态栏）。
+        """
+        names = {"shader.base_color": "底色", "shader.roughness": "粗糙度",
+                 "shader.metallic": "金属度", "standard.normal": "法线",
+                 "shader.normal": "法线", "misc.ao": "AO"}
+        text = "、".join(sorted(names.get(k, k) for k in self.images))
+        if self.declared_no_alpha:      # 15-B：文件名写明的事，表格里带一句短的
+            text += "（底色无 alpha）"
+        return text
+
+    def unrecognized_text(self) -> str:
+        """15-C 缺陷 D：第 ① 页「没认出的」那一格 —— 认不出类型的文件名 + 认出来但本版不用的类型。"""
+        parts = [f"{Path(p).name}（认不出是什么）" for p in self.unknown]
+        parts += list(self.ignored)
+        return "、".join(parts)
+
+    def assign(self, path, type_key: str) -> bool:
+        """手工把一张"认不出"的图**指定**成某个类型（指完就当正常素材用）。
+
+        15-C 缺陷 D：`…-BaseColor-awdjw-1k.png` 这种名字解析不出类型 → 它先进 `unknown`，
+        用户点它、选个类型，这一下就把它搬进 `images`。
+        """
+        target = Path(path)
+        if target not in [Path(p) for p in self.unknown]:
+            return False
+        self.images[type_key] = target
+        if not (self.sizes.get(type_key) or (0, 0))[0]:
+            try:
+                from . import imaging                     # 局部导入：别让模块级依赖绕圈
+                arr = imaging.load(target)
+                self.sizes[type_key] = (arr.shape[1], arr.shape[0])
+            except Exception:  # noqa: BLE001 —— 读不了就交给转换那一步去报错
+                self.sizes[type_key] = (0, 0)
+        self.unknown = [p for p in self.unknown if Path(p) != target]
+        return True
+
     def summary(self) -> str:
         names = {"shader.base_color": "底色", "shader.roughness": "粗糙度",
                  "shader.metallic": "金属度", "standard.normal": "法线",
                  "shader.normal": "法线", "misc.ao": "AO"}
         got = [names.get(k, k) for k in self.images]
-        return f"{self.group}（{self.source}）：" + "、".join(sorted(got))
+        text = f"{self.group}（{self.source}）：" + "、".join(sorted(got))
+        if self.declared_no_alpha:                  # 15-B：文件名已经写明的事，报告里也照说
+            text += "；底色文件名标了 _NoAlpha —— 这张底色没有 alpha"
+        return text
 
 
 def read_manifest(folder: str | Path):
@@ -180,6 +258,7 @@ def scan_folder(root: str | Path) -> list:
                            source="manifest" if by_file else "filename")
 
         for img in images:
+            _, declared_no_alpha = strip_no_alpha_marker(Path(img.name).stem)
             hit = by_file.get(img.name)
             if hit and isinstance(hit[1], dict):
                 key = hit[0]
@@ -189,15 +268,22 @@ def scan_folder(root: str | Path) -> list:
             else:
                 key, sx, sy, prefix = parse_filename(img.name)
                 if key is None:
+                    # 15-C 缺陷 D：**不许静默丢掉** —— 记下来，界面要列出来、还要能手工指定类型
+                    # （用户原话：改名成 `…-BaseColor-awdjw-1k.png` 后"导入素材表里直接少一张，
+                    #   界面什么都不说"）
+                    item.unknown.append(img)
                     continue
                 item.sizes.setdefault(key, (sx, sy))
                 if not item.group and prefix:
                     item.group = prefix
+            if declared_no_alpha and key == "shader.base_color":
+                item.declared_no_alpha = True
             if key in USED_TYPES:
                 item.images.setdefault(key, img)
             else:
                 item.ignored.append(f"{img.name}（{key}）")
 
-        if item.images:
+        # ⚠️ 一张都没认出来、但**有认不出的图** → 也要收进来：那一套得让人看见、让人指认
+        if item.images or item.unknown:
             sets.append(item)
     return sets

@@ -164,10 +164,12 @@ def planned_outputs(out_dir: Path, tex_name: str, names, kinds,
                     has_normal: bool = True, extra=()) -> list:
     """这次会写哪几个文件 —— **写盘之前**就能算出来（13-C 拿它查同名冲突）。
 
-    ⚠️ 必须与真正的落盘位置逐一对上：PNG 在 `out_dir/`、VTF 在 `out_dir/vtf/`、VMT 在 `out_dir/`，
-    外加记录文件 `phong_input.json` 与 `log.txt`（`pack.write_outputs` / `vtf.convert` / `vmt.write`
-    三处的命名规则）。法线那张可能压根不出（素材没有法线图）→ 按 `has_normal` 决定要不要算它。
+    ⚠️ 必须与真正的落盘位置逐一对上：PNG 在 `out_dir/`、VTF 在 `out_dir/vtf/`、VMT 在 `out_dir/`。
+    法线那张可能压根不出（素材没有法线图）→ 按 `has_normal` 决定要不要算它。
     `extra`：13-E 的眼睛专用图（虹膜 / 眼睛 AO）这类**额外产物** —— 由调用方按当前档位算好传进来。
+    ⚠️ **15-C**：**不列** `phong_input.json` / `log.txt` —— 那是**我们自己的账本**（每次重写），
+    不是用户的产物。列进去的话"逐槽各配一套素材"必然在第 2 个槽上撞名（同一个输出目录共用一个
+    记录文件）→ 用户会被一个莫名其妙的"要不要覆盖 phong_input.json"拦住。
     """
     out = []
     for kind in kinds:
@@ -177,7 +179,6 @@ def planned_outputs(out_dir: Path, tex_name: str, names, kinds,
         out.append(out_dir / "vtf" / f"{tex_name}_{kind}.vtf")
     out += list(extra)
     out += [out_dir / f"{n}.vmt" for n in names]
-    out += [out_dir / RECORD_NAME, out_dir / "log.txt"]
     return out
 
 
@@ -196,11 +197,14 @@ def names_from_model(model_path) -> tuple:
 
 
 def convert_set(matset, options: ConvertOptions, resolved, vmt_names=None,
-                cdm_override=None, confirm=None, progress=None) -> dict:
+                cdm_override=None, confirm=None, progress=None, slot="") -> dict:
     """一套素材走完全流程。返回结果字典（含 out_dir / 产物 / 警告 / deployed）。
 
     vmt_names / cdm_override：由"读 .mdl"那条路提供（一个模型可能有多个材质槽，
     但它们可以共用同一套贴图 → **一套贴图 + 多个 VMT**）。
+    slot：**15-C** —— 这次转换是给**哪个材质槽**做的（逐槽各配一套素材时用）。给了就把
+          "槽 ↔ 素材"并进 `phong_input.json` 的 `逐槽映射`（同一输出目录会为每个槽各跑一次，
+          后写的**不能**把前面的槽抹掉）。
     progress：可选回调 `f(阶段名, 0..1)`，给 GUI 显示进度用。
     """
     say = progress or (lambda stage, frac: None)
@@ -387,11 +391,26 @@ def convert_set(matset, options: ConvertOptions, resolved, vmt_names=None,
         "覆盖项": {k: resolved.values[k] for k in resolved.override_keys},
         "参数来源": resolved.sources_report(), "生效参数": resolved.values,
         "输入映射": {k: Path(v2).name for k, v2 in matset.images.items()},
+        # 15-B：文件名已经写明的事，报告里也照说（别再让用户对着"没 alpha 也要出声"那句含混话猜）
+        "底色 alpha": ("文件名标了 _NoAlpha —— 这张底色没有 alpha"
+                    if getattr(matset, "declared_no_alpha", False)
+                    else "文件名没标 _NoAlpha（这张底色有没有 alpha 看实际图）"),
         "认出来但本版不用": matset.ignored,
         "输出尺寸": {k: (list(s) if s else None) for k, s in result.sizes.items()},
         "被顶格的近镜面像素占比": clip_ratio,
         "产物": produced, "警告": result.warnings,
     }
+    if slot:
+        # 15-C：逐槽映射。同一输出目录会为**每个槽各跑一次**（每槽一套素材 → 各写各的 VMT/VTF），
+        # 而 `phong_input.json` 是全目录共用一个文件 → 每次把本槽并进已有的映射里，别互相抹掉。
+        record["材质槽"] = slot
+        mapping = dict((load_record(out_dir / RECORD_NAME) or {}).get("逐槽映射") or {})
+        # 15-H：逐槽参数**各归各** —— 把这一槽的覆盖项按 `slot:<槽名>.<键>` 记在它自己名下
+        # （顶层那份「覆盖项」是"这一跑"的解析结果；两者一起看就不会串味）
+        mapping[slot] = {"素材": matset.group, "指纹": fp, "产物": produced,
+                         "覆盖项": {f"slot:{slot}.{k}": v
+                                    for k, v in sorted((options.overrides or {}).items())}}
+        record["逐槽映射"] = mapping
     (out_dir / RECORD_NAME).write_text(
         json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "log.txt").write_text(

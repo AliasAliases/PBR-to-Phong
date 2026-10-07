@@ -25,7 +25,7 @@ WS = ROOT.parent
 sys.path.insert(0, str(ROOT))
 
 import numpy as np  # noqa: E402
-from PySide6 import QtWidgets  # noqa: E402
+from PySide6 import QtCore, QtWidgets  # noqa: E402
 
 from gui.main import MainWindow  # noqa: E402
 
@@ -49,6 +49,14 @@ def differs(x, y) -> bool:
     if x.shape != y.shape:
         return True
     return bool((x != y).any())
+
+
+def bg_ratio(img) -> float:
+    """画面里"球面之外的背景色"占多少（= 0 说明这块是铺满的，>0 说明有球外的暗底）。"""
+    if img is None:
+        return 1.0
+    bg = np.array([0x2B, 0x33, 0x40])
+    return float((np.abs(img[:, :, :3].astype(int) - bg).sum(axis=2) == 0).mean())
 
 
 def page_sets(win):
@@ -167,8 +175,19 @@ def main() -> int:
     check("笔刷线可选：底色 / 法线（**没有**指数图）", kinds_b == ["basecolor", "normal"],
           str(kinds_b))
     check("笔刷线右框仍有图（底色）", prev.right.has_image, prev.current_kind())
+    # 15-E：笔刷档默认外形 = 方块（铺墙感），并注明"没有 Phong，只是近似"
+    check("15-E：笔刷档默认外形 = 方块", prev.current_shape() == "plane", prev.current_shape())
+    check("15-E：笔刷档也能出图（不需要模型）", prev.right.has_image)
+    check("15-E：笔刷档注明了「没有 Phong、只是近似」",
+          "近似" in prev.lbl_note.text(), prev.lbl_note.text())
+    plane_img = np.asarray(prev.right.image_array) if prev.right.has_image else None
+    check("15-E：方块渲染铺满整块（没有球外背景）",
+          bg_ratio(plane_img) == 0.0, f"背景占比={bg_ratio(plane_img):.3f}")
     win.page_convert.rb_route_model.setChecked(True)
     app.processEvents()
+    check("15-E：切回模型线 → 外形回到球", prev.current_shape() == "sphere", prev.current_shape())
+    check("15-E：定位文案保留「最终以 HLMV / 游戏为准」",
+          "HLMV" in prev.lbl_note.text() and "游戏" in prev.lbl_note.text(), prev.lbl_note.text())
     kinds_m = [prev.cmb_kind.itemData(i) for i in range(prev.cmb_kind.count())]
     check("切回模型线 → 指数图重新可选", kinds_m == ["exp", "basecolor", "normal"], str(kinds_m))
     # 图种是**用户选的**就不该被切路线抢走（只在"这套/这条路线没有那张图"时才回落到第一项）
@@ -189,6 +208,63 @@ def main() -> int:
         QtWidgets.QDialog.exec = real_exec
     check("有图时点「放大预览」会开一个窗口", len(calls) == 1, str(calls))
     check("窗口标题带上是哪张图", bool(calls) and "：" in calls[0] or bool(calls), str(calls))
+    # 15-E：放大窗要**可缩放**（100/200/400% + 适应窗口），且单独造得出来（能测）
+    dlg = win.page_tuning.make_zoom_dialog()
+    check("15-E：放大窗单独造得出来（不是只有 exec 一条路）", dlg is not None)
+    if dlg is not None:
+        combos = dlg.findChildren(QtWidgets.QComboBox)
+        items = [c.itemText(i) for c in combos for i in range(c.count())]
+        check("15-E：放大窗里有缩放档（含「适应窗口」）",
+              any("100%" in t for t in items) and any("适应窗口" in t for t in items), str(items))
+        dlg.close()
+
+    # ---------- 15-E：右框是**渲染图**（按控件尺寸现算）----------
+    print("== 15-E：渲染图 ==")
+    prev.cmb_kind.setCurrentIndex(0)
+    prev.cmb_shape.setCurrentIndex(prev.cmb_shape.findData("sphere"))
+    app.processEvents()
+    r = snap(prev.right)
+    check("15-E：按**控件尺寸**渲染（不再固定 512）",
+          r is not None and abs(max(r.shape[:2]) - max(160, prev.right._side)) <= 2,
+          f"{None if r is None else r.shape} 控件边长={prev.right._side}")
+    check("15-E：球面之外是暗背景（说明真的画了个球）",
+          bg_ratio(r) > 0.15, f"背景占比={bg_ratio(r):.3f}")
+    prev.cmb_shape.setCurrentIndex(prev.cmb_shape.findData("plane"))
+    app.processEvents()
+    check("15-E：切方块 → 换了一张图", differs(r, snap(prev.right)))
+    prev.cmb_shape.setCurrentIndex(prev.cmb_shape.findData("sphere"))
+    app.processEvents()
+    b0 = snap(prev.right)
+    panel.sl_sharp.setSliderDown(True)               # 拖动中不刷新（沿用旧规矩）
+    panel.sl_sharp.setValue(25)
+    app.processEvents()
+    check("15-E：拖动中渲染图不动（刷新粒度没被破坏）", not differs(b0, snap(prev.right)))
+    panel.sl_sharp.setSliderDown(False)
+    panel.sl_sharp.sliderReleased.emit()
+    for _ in range(2):
+        app.processEvents()
+    check("15-E：松手后渲染图跟着参数变", differs(b0, snap(prev.right)))
+    win.page_config.reset_overrides()
+
+    # ---------- 15-E 返工2：那一行控件在**两个框的下面、水平居中**（单 `c8cd02b` §15-E）----------
+    print("== 15-E 返工2：那行控件的落点 ==")
+    win.resize(1280, 760)
+    win.tabs.setCurrentIndex(1)
+    win.page_tuning.apply_sizes()
+    for _ in range(3):
+        app.processEvents()
+    frames_bottom = prev.left.mapTo(prev, QtCore.QPoint(0, prev.left.height())).y()
+    row_y = prev.cmb_kind.mapTo(prev, QtCore.QPoint(0, 0)).y()
+    check("15-E 返工2：那行控件在两个框的**下面**（没压进预览区）",
+          row_y >= frames_bottom, f"控件行 y={row_y} 框底 y={frames_bottom}")
+    lx = prev.lbl_kind.mapTo(prev, QtCore.QPoint(0, 0)).x()
+    rx = prev.lbl_note.mapTo(prev, QtCore.QPoint(prev.lbl_note.width(), 0)).x()
+    check("15-E 返工2：那行控件**水平居中**（左右留白一样且都不是 0）",
+          lx > 0 and abs(lx - (prev.width() - rx)) <= 8,
+          f"左留白={lx} 右留白={prev.width() - rx} 左半区宽={prev.width()}")
+    win.tabs.setCurrentIndex(0)
+    for _ in range(3):
+        app.processEvents()
 
     # ---------- 预览不碰 materials / 不调 VTFCmd ----------
     print("== 预览不产生副作用 ==")

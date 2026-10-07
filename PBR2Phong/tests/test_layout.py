@@ -262,6 +262,19 @@ def main() -> int:
     check("界面文案里没有 Markdown 星号/反引号", not stars, str(stars))
     win.set_language("zh")
 
+    # 15-F（用户 ⑤+⑥）：① 命名（决定材质路径）整组**上移**到「导入素材」上面；
+    #                    ② 用户点名"口语又啰嗦"的那些旧句子必须消失、新句子在位。
+    app.processEvents()
+    pc = win.page_convert
+    y_naming = pc.grp_naming.mapTo(pc, QtCore.QPoint(0, 0)).y()
+    y_import = pc.grp_import.mapTo(pc, QtCore.QPoint(0, 0)).y()
+    check("15-F：命名区在「导入素材」上面", y_naming < y_import,
+          f"命名 y={y_naming} / 导入 y={y_import}")
+    pc_texts = " ".join(visible_texts(pc))
+    check("15-F：用户点名那句旧文案已消失", "你就不用管了" not in pc_texts, pc_texts[:100])
+    check("15-F：新文案在位（材质路径就写在模型里）",
+          "材质路径就写在模型里" in pc_texts, pc_texts[:100])
+
     # ⚠️ 第四道（**11 片重写 + 返工**）：**所有灰字解释在中英两种语言、两条路线下都不许被无声截断**。
     #    原来那条是"只量第 2 页「预设」那一行、只比文本宽 ≤ 控件宽"（= 只认一行）：
     #    ① 它把"该换行"误判成"被截断"，10 片据此写了假警报；② 它完全没管英文 —— 英文文案更长，
@@ -401,6 +414,44 @@ def main() -> int:
               f"眼睛组={sp.grp_eye.isVisible()} 最小需求={ms.width()}×{ms.height()} "
               f"实得={page.width()}×{page.height()}")
         w.close()
+    # 15-C：模型有多个材质槽 → 第 ① 页会**多出一块「材质槽 ↔ 素材」** → 那时候也必须零滚动。
+    #      没有真模型就逼不出这块 → 公开仓库 / CI 上说明并跳过（不许报红）。
+    mdl = Path(r"D:\SteamLibrary\steamapps\common\Left 4 Dead 2"
+               r"\left4dead2\models\custom\school_gate.mdl")
+    if not mdl.is_file():
+        print("   ⏭ 跳过 15-C 零滚动那条：没找到 L4D2 的真实模型 school_gate.mdl")
+    else:
+        for size, tag in SIZES:
+            w = MainWindow()
+            w.resize(*size)
+            w.show()
+            app.processEvents()
+            pc = w.page_convert
+            pc.load_folder(ROOT.parent / "测试素材" / "合成素材")
+            pc.ed_model.setText(str(mdl))
+            app.processEvents()
+            # 15-H：槽那块/切换器出现之后，**第 ①②③ 页**都得照样零滚动
+            for idx in (0, 1, 2):
+                w.tabs.setCurrentIndex(idx)
+                w.page_tuning.apply_sizes()
+                for _ in range(3):
+                    app.processEvents()
+                page = w.tabs.currentWidget()
+                bad = real_scrollbars(page)
+                ms = page.minimumSizeHint()
+                check(f"{tag} 多材质槽下第 {idx + 1} 页：零滚动且装得下",
+                      not bad and ms.height() <= page.height() and ms.width() <= page.width(),
+                      f"可见滚动条={len(bad)} 最小需求={ms.width()}×{ms.height()} "
+                      f"实得={page.width()}×{page.height()}")
+            check(f"{tag} 15-C：槽那块出现",
+                  pc.grp_slots.isVisibleTo(pc), str(pc.grp_slots.isVisibleTo(pc)))
+            check(f"{tag} 15-H：第 ②/③ 页的「正在编辑的槽」出现",
+                  w.page_tuning.cmb_slot.isVisibleTo(w.page_tuning)
+                  and w.page_config.cmb_slot.isVisibleTo(w.page_config),
+                  f"{w.page_tuning.cmb_slot.isVisibleTo(w.page_tuning)} / "
+                  f"{w.page_config.cmb_slot.isVisibleTo(w.page_config)}")
+            w.close()
+
     check("页面变小时预览框跟着缩（零滚动的核心手法）",
           sides["1200×680"] <= sides["1280×760"],
           f"1280×760 → {sides['1280×760']}px ；1200×680 → {sides['1200×680']}px")
