@@ -443,11 +443,9 @@ STRINGS = {
     "eye.title": {"zh": "眼睛专用图（只对「角色-眼睛」档）",
                   "en": "Eye textures (Character · Eyes preset only)"},
     "eye.hint": {
-        "zh": "眼睛档要的是虹膜那张图（美术资产）：PBR 那几张烘不出虹膜构图。虹膜图必填，"
-              "眼睛 AO 选填（没有就不写 $AmbientOcclTexture）—— 换到别的档这组会自己消失。",
-        "en": "The Eyes preset needs the iris image (an art asset — the PBR bakes cannot produce "
-              "an iris). Iris is required, eye AO is optional (no AO ⇒ no $AmbientOcclTexture "
-              "line). Switching to another preset hides this group."},
+        "zh": "眼睛档要的是虹膜那张图（美术资产）：虹膜图必填，眼睛 AO 选填（没有就不写 $AmbientOcclTexture）。",
+        "en": "The Eyes preset needs the iris image (an art asset): iris is required, eye AO optional "
+              "(no AO ⇒ no $AmbientOcclTexture line)."},
     "eye.iris": {"zh": "虹膜图（必填）", "en": "Iris map (required)"},
     "eye.ao": {"zh": "眼睛 AO（选填）", "en": "Eye AO (optional)"},
     "eye.pick": {"zh": "选一张眼睛专用图", "en": "Pick an eye texture"},

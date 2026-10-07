@@ -47,7 +47,10 @@ def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="pbr2phong-firstrun-"))
     # ★ 关键：指到一个还不存在的目录 = "这台机器第一次运行"
     os.environ["PBR2PHONG_HOME"] = str(tmp / "home")
-    os.environ.pop("PBR2PHONG_LANG", None)
+    # ⚠️ 14-E：这里**不再**清掉 `PBR2PHONG_LANG` —— 以前清掉是"模拟跟随系统"，但 CI 的 runner 是**英文系统**
+    #    → 界面起成英文，而这套断言是按中文写的（GitHub Actions #2 实测 5 条红）。
+    #    "第一次运行"这个语义只跟**配置目录不存在**有关，与语言无关；语言由 `tests/run_all.py` 统一钉成 zh，
+    #    手动单跑时（不设该变量）仍然走系统探测 —— 行为没被掩盖。
 
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     # 弹框会被替换掉：既不死等用户点，又能断言"到底说了什么人话"
